@@ -361,7 +361,7 @@ export function opcoesDaLinhaDeComando(argv = process.argv.slice(2)): OpcoesDoAm
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const o = opcoesDaLinhaDeComando();
-  if (o.seFaltar && ambienteValido(o.saida)) {
+  if (o.seFaltar && !o.forcar && ambienteValido(o.saida)) {
     console.log(`Ambiente local já existe e é válido em ${resolve(o.saida)}`);
   } else {
     if (existsSync(o.saida) && !o.forcar && !o.seFaltar) {

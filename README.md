@@ -8,7 +8,7 @@ A regra que organiza todo o desenho: **a senha do paciente no laboratório nunca
 
 **Rascunho, em fase de piloto.** Versão 0.2.1 da especificação, de 2026-11-16. O histórico está em [CHANGELOG.md](CHANGELOG.md).
 
-- Nada foi implementado nem testado contra um laboratório real.
+- Nada foi implementado nem testado contra um laboratório real. Há um servidor de exemplo, com dados sintéticos, e uma suíte de conformidade (seção "Ferramentas").
 - Enquanto a versão começar com 0, qualquer mudança pode quebrar a anterior.
 - Os perfis FHIR referenciados ficam em outro repositório, o do guia de implementação, e ainda podem mudar.
 - Este repositório é privado durante o piloto. A abertura é condição para a versão 1.0.0.
@@ -41,6 +41,15 @@ especificacao/          a especificação
 docs/
   FONTES.md             todas as fontes consultadas, com URL e data de acesso
   NOTAS-DE-REVISAO.md   decisões tomadas, pendências e itens não verificados
+  servidor-e-suite.md   como rodar o servidor de exemplo e a suíte de conformidade
+  cobertura-de-requisitos.md  requisito, teste e situação, gerado pela suíte
+  pontos-da-especificacao.md  ambiguidades encontradas na implementação
+servidor-de-exemplo/    provedor de dados simulado, com dados sintéticos (código)
+suite-de-conformidade/  suíte de conformidade do provedor e receptor mínimo (código)
+ambiente-local/         PKI de teste e registro local assinado (código)
+comum/                  código usado pelos três acima
+ferramentas/            conferência de links e tabela de cobertura (código)
+Dockerfile              imagem do servidor de exemplo, para uso local
 ```
 
 Comece por [especificacao/00-indice.md](especificacao/00-indice.md). Quem vai avaliar o custo de implementar em um laboratório encontra ali uma lista do que precisa ser construído.
@@ -57,6 +66,19 @@ Comece por [especificacao/00-indice.md](especificacao/00-indice.md). Quem vai av
 | [08](especificacao/08-registro-de-participantes.md) | Registro de participantes |
 | [09](especificacao/09-versionamento-e-conformidade.md) | Versionamento e conformidade |
 
+## Ferramentas
+
+O servidor de exemplo implementa o lado do provedor da especificação 0.2.1, com dados sintéticos. A suíte de conformidade executa os 124 requisitos de provedor do capítulo 9 contra qualquer provedor apontado por configuração, e passa por inteiro contra o servidor de exemplo. Com Node 22.18 ou mais novo, pnpm e openssl:
+
+```sh
+pnpm install
+pnpm conformidade:local   # servidor de exemplo e suíte, em um comando
+pnpm jornada              # jornada de ponta a ponta com um receptor mínimo
+pnpm test
+```
+
+Como um laboratório roda a suíte contra o próprio ambiente de homologação está em [docs/servidor-e-suite.md](docs/servidor-e-suite.md). A cobertura de cada requisito está em [docs/cobertura-de-requisitos.md](docs/cobertura-de-requisitos.md).
+
 ## Governança
 
 O mantenedor atual é a Precisa Saúde. O nome do protocolo e os identificadores não carregam o nome de nenhuma empresa, e [GOVERNANCE.md](GOVERNANCE.md) descreve como o controle de mudanças passa a um comitê de implementadores e, depois, a uma entidade de padronização.
@@ -68,7 +90,7 @@ Duas licenças, conforme o tipo de conteúdo:
 | Conteúdo | Licença | Arquivo |
 | --- | --- | --- |
 | **Texto da especificação e documentação**: tudo em `especificacao/*.md`, `docs/`, `README.md`, `GOVERNANCE.md`, incluindo os diagramas | Creative Commons Atribuição 4.0 Internacional (CC BY 4.0) | [LICENSE-spec](LICENSE-spec) |
-| **Código e artefatos legíveis por máquina**: `especificacao/registro/` (schema e exemplos) e qualquer ferramenta, biblioteca ou suíte de conformidade que venha a ser acrescentada | Apache License 2.0 | [LICENSE](LICENSE) |
+| **Código e artefatos legíveis por máquina**: `especificacao/registro/` (schema e exemplos), `servidor-de-exemplo/`, `suite-de-conformidade/`, `ambiente-local/`, `comum/`, `ferramentas/`, `Dockerfile` e qualquer outra ferramenta, biblioteca ou suíte de conformidade que venha a ser acrescentada | Apache License 2.0 | [LICENSE](LICENSE) |
 
 Trechos de código e exemplos JSON embutidos no texto da especificação podem ser usados sob a Apache License 2.0.
 
