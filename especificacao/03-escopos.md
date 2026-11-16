@@ -34,8 +34,8 @@ Qualquer token de paciente, com qualquer conjunto de escopos, também permite:
 
 ## 3.3 Regras
 
-1. O token de provedor NÃO DEVE carregar escopos de paciente, e o token de paciente NÃO DEVE carregar escopos de provedor. Um receptor que precisa dos dois tipos mantém dois tokens.
-2. O consentimento lista apenas escopos de paciente. A lista `scopes` da criação DEVE ter ao menos um.
+1. O token de provedor NÃO DEVE carregar escopos de paciente, e o token de paciente NÃO DEVE carregar escopos de provedor. Um receptor que precisa dos dois tipos mantém dois tokens. Entre os escopos de provedor, o receptor DEVERIA pedir um token por escopo e DEVE pedir `consent.manage` sempre sozinho ([05-api.md](05-api.md), seção 5.3.4).
+2. O consentimento lista apenas escopos de paciente. A lista `scopes` da criação DEVE ter ao menos um. No recurso FHIR `Consent`, os escopos ficam em `provision.action`, ligado de forma obrigatória ao conjunto de valores `lab-access-patient-scope-vs` do guia de implementação, que contém exatamente os três escopos de paciente. Os códigos vêm do sistema `https://fhir-brasil.dev.br/CodeSystem/lab-access-scope`.
 3. O token de paciente carrega, além dos escopos do consentimento, o escopo dinâmico `consent:{consent_id}`. O formato é o que o Open Finance Brasil usa: a palavra `consent`, dois pontos e o identificador devolvido na criação [OFB-FAPI], seção 7.1. O FAPI 2.0 recomenda outro mecanismo, o RFC 9396, quando o parâmetro `scope` não basta [FAPI2-SP], seção 5.3.2.2, nota 5. A versão 1 fica com o escopo dinâmico por ser mais simples de implementar.
 4. Um token de paciente só alcança dados do paciente do consentimento a que está ligado. O servidor de recursos DEVE recusar qualquer tentativa de ler ou gravar dados de outro paciente, mesmo com escopo correto.
 5. `appointment.write` permite ler e alterar somente agendamentos criados pelo mesmo receptor por meio do protocolo. Agendamentos que o paciente fez por outros canais do laboratório não são visíveis.
@@ -79,7 +79,9 @@ https://fhir-brasil.dev.br/ig/StructureDefinition/<id>
 | `br-diagnostic-report` | DiagnosticReport |
 | `br-lab-observation` | Observation |
 
-Os nove primeiros perfis estão sendo escritos em paralelo a este texto e o conteúdo deles não é final. Onde esta especificação depende de uma decisão do guia (por exemplo, em qual elemento do Slot fica o código do exame), o ponto está marcado em [05-api.md](05-api.md) e listado em `docs/NOTAS-DE-REVISAO.md`.
+Os nove primeiros perfis foram incorporados ao guia de implementação depois da versão 0.2.0 desta especificação, e a versão 0.2.1 foi conferida contra eles. Onde esta especificação ainda depende de uma decisão do guia (por exemplo, em qual sistema de códigos fica o exame em `Slot.serviceType`), o ponto está marcado em [05-api.md](05-api.md) e listado em `docs/NOTAS-DE-REVISAO.md`.
+
+Além dos perfis, o protocolo referencia do guia a extensão `https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link` ([05-api.md](05-api.md), seção 5.5.5).
 
 Todo recurso devolvido pelo provedor DEVE declarar o perfil correspondente em `meta.profile` e DEVE ser válido contra ele.
 

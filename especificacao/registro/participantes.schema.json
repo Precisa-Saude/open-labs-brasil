@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://open-labs-brasil.example/schemas/registro/1.0/participantes.schema.json",
+  "$id": "https://open-labs-brasil.example/schemas/registro/0.1/participantes.schema.json",
   "title": "Registro de participantes do Open Labs Brasil",
   "description": "Formato do arquivo participantes.json descrito em especificacao/08-registro-de-participantes.md. Os nomes de campo são identificadores do protocolo e ficam em inglês. O host do $id (open-labs-brasil.example) é provisório: o protocolo ainda não tem domínio, e o TLD .example é reservado e não resolve.",
   "type": "object",
@@ -16,9 +16,9 @@
   ],
   "properties": {
     "schema_version": {
-      "description": "Versão do formato do registro (MAJOR.MINOR).",
+      "description": "Versão do formato do registro (MAJOR.MINOR). Numeração própria, independente da versão do protocolo.",
       "type": "string",
-      "pattern": "^1\\.[0-9]+$"
+      "pattern": "^0\\.[0-9]+$"
     },
     "environment": {
       "description": "Ambiente a que o registro se aplica.",
@@ -161,7 +161,7 @@
           }
         },
         "protocol_versions": {
-          "description": "Versões MAJOR.MINOR do protocolo que o participante implementa.",
+          "description": "Versões MAJOR.MINOR do protocolo que o participante implementa. Enquanto MAJOR for 0, exatamente uma.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,

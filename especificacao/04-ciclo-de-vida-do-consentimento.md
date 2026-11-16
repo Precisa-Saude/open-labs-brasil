@@ -88,6 +88,15 @@ Nenhuma outra transição é permitida. `REJECTED`, `REVOKED` e `EXPIRED` não m
 - Havendo diferença, o receptor DEVE enviar `DELETE /consents/{consent_id}?reason=PATIENT_MISMATCH`, DEVE descartar os tokens e o CPF recebido, e NÃO DEVE ler nem gravar dado de saúde com aquele consentimento.
 - O receptor NÃO DEVE usar o CPF recebido para outra finalidade além da comparação.
 
+**Conferência impossível**
+
+A conferência é impossível quando o receptor não consegue um `patient.cpf` utilizável: a leitura do consentimento falha (erro de rede, 429 ou 5xx depois de até três tentativas com recuo, ou 401, 403 ou 404 na primeira resposta), ou responde 200 sem o objeto `patient`, sem `patient.cpf`, ou com um valor que não tem 11 dígitos com dígitos verificadores válidos.
+
+- Nesse caso o receptor NÃO DEVE concluir o vínculo e NÃO DEVE ler nem gravar dado de saúde com aquele consentimento. Um vínculo sem conferência não é aceito em nenhuma circunstância, nem de forma provisória.
+- O receptor DEVE descartar os tokens e DEVE revogar o consentimento com `DELETE /consents/{consent_id}?reason=RECEIVER_TERMINATION`.
+- O receptor NÃO DEVE usar `reason=PATIENT_MISMATCH` nesse caso. `PATIENT_MISMATCH` afirma que dois CPFs foram comparados e são diferentes, o que não foi observado.
+- O paciente é avisado de que a conexão não pôde ser concluída e pode tentar de novo, com um novo consentimento.
+
 **Vigência**
 
 - O servidor de autorização DEVE emitir e aceitar tokens de paciente somente enquanto o consentimento ligado a eles estiver `AUTHORISED`.
@@ -101,6 +110,20 @@ Nenhuma outra transição é permitida. `REJECTED`, `REVOKED` e `EXPIRED` não m
 - O receptor DEVE oferecer ao paciente uma tela equivalente e DEVE enviar `DELETE` ao provedor quando o paciente revogar por ali.
 - Revogar é gratuito para o paciente nos dois lados.
 - `DELETE` em um consentimento que já está em estado final responde 422 com `CONSENT_INVALID_STATE`.
+
+**Revogação pendente**
+
+Vale para toda revogação que o receptor envia: pedida pelo paciente, por encerramento do vínculo, por `PATIENT_MISMATCH` ou por conferência impossível.
+
+1. No momento em que a revogação é decidida, antes de qualquer chamada, o receptor DEVE descartar o token de acesso e o refresh token daquele consentimento e parar de chamar a API FHIR com ele. A partir daí, do ponto de vista do receptor, o acesso acabou.
+2. O receptor envia o `DELETE`. Em falha que admite repetição (rede, 429, 5xx, ou falha ao obter o token de provedor), ele faz no máximo **três tentativas automáticas** ao todo, com recuo exponencial e respeitando `Retry-After`.
+3. Se as três falham, o receptor DEVE gravar a revogação como **pendente** em armazenamento durável, que sobreviva a reinício do backend, com `consent_id`, provedor, motivo e instante do pedido.
+4. Enquanto pendente, o receptor DEVE repetir a tentativa ao menos uma vez por hora nas primeiras 24 horas e ao menos uma vez por dia depois disso. Cada repetição é uma única chamada, sem nova sequência de três.
+5. Enquanto pendente, o receptor DEVE mostrar ao paciente, na tela de consentimentos, que o aplicativo já parou de acessar os dados, que a revogação ainda não foi confirmada pelo laboratório, e o endereço da página de consentimentos do provedor (`consent_management_uri`), onde o paciente pode revogar diretamente.
+6. A pendência termina quando o `DELETE` responde 204, ou 422 `CONSENT_INVALID_STATE`, ou 404 `CONSENT_NOT_FOUND`, ou quando uma leitura do consentimento mostra estado final, ou quando passa `expiration_date_time`. Nos quatro últimos casos o consentimento já não vale no provedor.
+7. O receptor NÃO DEVE apagar uma pendência por desistência nem por limite de tentativas.
+
+A página de consentimentos do provedor é o caminho garantido do paciente: funciona mesmo que o receptor esteja fora do ar, suspenso no registro ou com o registro expirado. Por isso o item 5 é obrigatório.
 
 **Histórico**
 

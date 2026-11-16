@@ -1,38 +1,57 @@
 # 9. Versionamento e conformidade
 
-## 9.1 Versionamento da especificação
+## 9.1 Versionamento
 
-A especificação usa três números, `MAJOR.MINOR.PATCH`.
+Há quatro números de versão, com papéis diferentes.
 
-| Parte | Muda quando | Efeito para quem já implementou |
+| Número | Formato | Onde aparece | O que significa | Valor hoje |
+| --- | --- | --- | --- | --- |
+| **Versão do documento** | `MAJOR.MINOR.PATCH` | Índice, README, `CHANGELOG.md` | Edição do texto da especificação | `0.2.1` |
+| **Versão do protocolo** | `MAJOR.MINOR` | `protocol_versions` de cada participante no registro | O comportamento que o participante implementa. São os dois primeiros números da versão do documento que ele seguiu | `0.2` |
+| **Segmento de caminho** | `v{MAJOR}` | Final de `api_base_url` | Só o MAJOR da versão do protocolo. Existe para que dois MAJOR convivam no mesmo servidor | `v0` |
+| **Versão do formato do registro** | `MAJOR.MINOR` | `schema_version` do registro | Formato do arquivo de participantes. Numeração própria, sem relação com as outras três | `0.1` |
+
+O PATCH nunca aparece no registro nem em caminho. Duas implementações de `0.2.0` e `0.2.1` declaram a mesma versão de protocolo, `0.2`.
+
+A API FHIR não leva a versão do protocolo no caminho. A versão do FHIR (R4) e os perfis suportados são declarados no `CapabilityStatement`.
+
+**O que cada parte da versão do documento significa**
+
+| Parte | Com MAJOR igual a 1 ou mais | Com MAJOR igual a 0 (fase atual) |
 | --- | --- | --- |
-| MAJOR | Um cliente ou servidor conforme deixa de funcionar com a outra ponta: campo obrigatório novo, remoção de endpoint, mudança de significado de estado, troca de algoritmo | Exige mudança de código |
-| MINOR | Acréscimo compatível: escopo novo, campo opcional novo, código de erro novo, parâmetro de busca novo com suporte opcional | Continua funcionando sem mudar |
-| PATCH | Correção de texto, exemplo ou diagrama, sem efeito no comportamento | Nenhum |
+| MAJOR | Um cliente ou servidor conforme deixa de funcionar com a outra ponta | Passa a 1 quando houver piloto com ao menos um provedor e um receptor independentes entre si |
+| MINOR | Acréscimo compatível: escopo novo, campo opcional novo, código de erro novo, parâmetro de busca opcional novo | **Pode quebrar a versão anterior.** É tratado como incompatível |
+| PATCH | Correção de texto, exemplo ou diagrama, sem efeito no comportamento | Correções de texto e esclarecimentos de pontos em que o texto era ambíguo ou omisso. Um esclarecimento pode fixar um comportamento que antes ficava a critério de quem implementava, e o `CHANGELOG.md` DEVE listar cada um desses casos |
 
-Este rascunho é a versão `0.2.0`. Enquanto o MAJOR for 0, qualquer versão pode quebrar a anterior. A versão `1.0.0` só deveria sair depois de um piloto com ao menos um provedor e um receptor independentes entre si.
+**Negociação de versão entre dois participantes**
 
-**Onde a versão aparece.**
+A versão efetiva entre um receptor e um provedor é calculada pelos dois, da mesma forma, a partir de `protocol_versions` de cada um no registro. Ela não é enviada em nenhuma mensagem.
 
-- No caminho dos endpoints de consentimento: `api_base_url` termina em `/v{MAJOR}`.
-- No registro: `protocol_versions` de cada participante lista as versões `MAJOR.MINOR` implementadas.
-- A API FHIR não leva a versão do protocolo no caminho. A versão do FHIR (R4) e os perfis suportados são declarados no `CapabilityStatement`.
+1. Toma-se o maior MAJOR que aparece nas duas listas. Se não há MAJOR em comum, não há comunicação.
+2. **Se esse MAJOR é 0:** a versão efetiva é a maior versão `0.MINOR` idêntica nas duas listas. Se não há versão idêntica, não há comunicação. `0.2` e `0.3` não se falam.
+3. **Se esse MAJOR é 1 ou mais:** quem lista `M.n` se compromete a operar corretamente com qualquer `M.k` em que `k` é menor ou igual a `n`. A versão efetiva é `M.m`, em que `m` é o menor entre o maior MINOR de cada lado para aquele MAJOR. Não é preciso haver MINOR idêntico. O lado com MINOR maior NÃO DEVE depender de nada introduzido depois de `M.m`: não envia campo, escopo ou parâmetro que a outra ponta não conhece, e não exige dela resposta que só exista em versão posterior.
+4. O caminho usado é o `api_base_url` do provedor cujo final é `/v{M}`.
 
-**Regras de compatibilidade.**
+"Não há comunicação" quer dizer: o receptor não oferece aquele provedor ao paciente e não chama nenhum endpoint dele, e o provedor recusa o receptor com `invalid_client` no servidor de autorização e com 403 `RECEIVER_NOT_ALLOWED` nas APIs.
+
+Enquanto o MAJOR for 0, cada participante DEVE listar exatamente uma versão em `protocol_versions`. Um mesmo caminho `/v0` não tem como atender duas versões incompatíveis ao mesmo tempo, então a troca de `0.x` para `0.y` é combinada entre os participantes do piloto e feita em data marcada.
+
+Consentimentos e tokens existentes não mudam de versão. Se a versão efetiva entre dois participantes deixa de existir (um deles mudou de MINOR na fase 0), valem as regras de receptor `suspended`: nada novo é aceito, e os consentimentos ficam como estão até a compatibilidade voltar, expirarem ou serem revogados. A revogação continua possível pelas regras de [08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3, e pela página do provedor.
+
+**Regras de compatibilidade**
 
 - Receptores DEVEM ignorar campos JSON que não conhecem em respostas, e tratar códigos de erro desconhecidos pelo status HTTP ([06-erros.md](06-erros.md), seção 6.4).
 - Provedores DEVEM recusar campos desconhecidos no corpo de `POST /consents` com `INVALID_REQUEST`, para que um receptor não acredite que uma restrição foi aplicada quando não foi.
-- Um participante escolhe, para falar com outro, a maior versão `MAJOR.MINOR` que os dois listam no registro. Sem versão MAJOR em comum, não há comunicação.
-- Quando sai um MAJOR novo, o anterior continua válido por ao menos 12 meses. Um provedor que implementa dois MAJOR publica dois `api_base_url`, um por entrada de versão, em formato a definir quando o caso existir.
+- Quando sai um MAJOR novo, a partir do 1, o anterior continua válido por ao menos 12 meses. Um provedor que implementa dois MAJOR tem dois caminhos, `/v{M}` e `/v{M+1}`. Como o registro traz um só `api_base_url` por entrada, o formato do registro precisará de um MINOR para acomodar isso, a definir quando o caso existir.
 - Os perfis FHIR têm versionamento próprio, no guia de implementação. Esta especificação referencia perfis pela URL canônica sem versão. Uma mudança incompatível em um perfil exige um MINOR ou MAJOR daqui que diga qual versão do guia passa a valer.
 
-**Mudanças.** Toda mudança entra por proposta pública e fica registrada em um arquivo de mudanças na raiz do repositório. Quem aprova está em `GOVERNANCE.md`.
+**Mudanças.** Toda mudança entra por proposta pública e fica registrada em `CHANGELOG.md`, na raiz do repositório. Quem aprova está em `GOVERNANCE.md`.
 
 ## 9.2 Conformidade
 
 Um participante é conforme a uma versão quando cumpre todos os requisitos DEVE e NÃO DEVE que se aplicam ao seu papel. No piloto, a conformidade é autodeclarada contra a lista da seção 9.3. Uma suíte automatizada é trabalho futuro, e a lista foi escrita para servir de roteiro dela.
 
-Cada requisito tem um identificador estável. A partir da primeira versão publicada, um identificador nunca é reaproveitado: requisito removido fica marcado como retirado, e requisito alterado de forma incompatível ganha número novo. Os identificadores deste rascunho foram renumerados uma vez, antes do primeiro commit, quando o perfil de segurança mudou.
+Cada requisito tem um identificador estável. A partir da primeira versão publicada, um identificador nunca é reaproveitado: requisito removido fica marcado como retirado, e requisito alterado de forma incompatível ganha número novo. Os identificadores foram renumerados uma única vez, antes do primeiro commit, quando o perfil de segurança mudou. Desde a versão 0.2.0 a regra vale: a versão 0.2.1 só acrescentou identificadores e marcou dois como retirados.
 
 Prefixos: `REG` registro, `SEG` transporte e chaves, `AUT` servidor de autorização, `CNS` consentimento, `API` regras comuns da API, `CAT` catálogo, `UNI` unidades, `AGE` agenda, `AGD` agendamento, `RES` resultados, `ERR` erros, `RCP` receptor.
 
@@ -49,7 +68,11 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | REG-003 | Recusa um registro que não valida contra o schema | Servir um documento assinado com campo obrigatório ausente |
 | REG-004 | Busca o registro ao menos a cada 60 minutos | Observar as requisições ao endereço do registro por 2 horas |
 | REG-005 | Aplica mudança de `status` em até 60 minutos | Suspender o cliente de teste e medir quando o provedor passa a recusá-lo |
-| REG-006 | Depois de `expires_at` sem documento novo, deixa de aceitar novas autorizações e novas concessões `client_credentials` | Deixar o registro expirar. PAR e `client_credentials` falham |
+| REG-006 | *Retirado na 0.2.1.* Substituído por REG-008, que mantém a regra e abre a exceção da revogação | |
+| REG-007 | Aplica os catorze passos de verificação da seção 8.3 e recusa o candidato que falha em qualquer um: algoritmo diferente de PS256, `kid` diferente do thumbprint, validade maior que 30 dias, ambiente errado, `participant_id` repetido | Servir um candidato por condição, cada um validamente assinado quando a condição não é a assinatura |
+| REG-008 | Depois de `expires_at` sem documento novo, recusa PAR, criação de consentimento e `client_credentials` de catálogo, unidades e agenda. Por 7 dias, aceita `client_credentials` com `consent.manage` como único escopo e atende `GET` e `DELETE` de consentimento. Depois dos 7 dias, recusa também | Deixar o registro expirar. No dia 1: PAR falha, `catalog.read` falha, `consent.manage` sozinho funciona, `DELETE` devolve 204, `POST /consents` devolve 403 `REGISTRY_EXPIRED`. No dia 8: `consent.manage` falha |
+| REG-009 | Calcula a versão efetiva pela regra da seção 9.1 e não se comunica com participante sem versão efetiva | Registro com par `0.2` e `0.3`: sem comunicação. Registro com `1.1` e `1.3`: comunicação como `1.1` |
+| REG-010 | Enquanto o MAJOR for 0, lista exatamente uma versão em `protocol_versions` | Ler a entrada do participante |
 
 ### Transporte e chaves (provedor)
 
@@ -93,6 +116,8 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | AUT-023 | Recusa cliente `suspended` ou `withdrawn` | `invalid_client` |
 | AUT-024 | A página de login e a tela de consentimento são servidas pelo domínio do provedor, e nenhum endpoint aceita credenciais do paciente enviadas pelo cliente | Inspecionar a origem das páginas e os metadados |
 | AUT-025 | Não usa status 307 nos redirecionamentos da jornada de autorização | Inspecionar os redirecionamentos |
+| AUT-026 | Os metadados trazem cada valor obrigatório da tabela da seção 5.2, com o valor exigido | Comparar campo a campo |
+| AUT-027 | Aceita `client_credentials` com um único escopo de provedor, qualquer que seja | Uma requisição por escopo |
 
 ### Consentimento (provedor)
 
@@ -138,6 +163,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | API-009 | `GET /metadata` devolve `CapabilityStatement` com interações, parâmetros e perfis suportados | Ler e comparar com o comportamento |
 | API-010 | Toda resposta 4xx e 5xx traz `OperationOutcome` com um código de `urn:open-labs-brasil:error-code` | Provocar cada erro da seção 6.3 |
 | API-011 | Leitura por id de recurso de outro paciente devolve 404 | Usar id de recurso do paciente B com token do paciente A |
+| API-012 | Todo `link` de paginação fica dentro do `fhir_base_url` do registro | Paginar cada busca e comparar esquema, host, porta e prefixo de caminho |
 
 ### Catálogo, unidades e agenda (provedor, token de provedor)
 
@@ -174,6 +200,9 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | AGD-012 | `PUT` que altera elemento não permitido, inclusive um pedido contido, devolve 422 `APPOINTMENT_FIELD_NOT_MODIFIABLE` | Alterar o paciente. Alterar o código de um pedido |
 | AGD-013 | Só são visíveis agendamentos criados pelo mesmo receptor pelo protocolo | Criar agendamento por outro canal e buscar |
 | AGD-014 | Não expõe `ServiceRequest` como recurso endereçável | `GET /ServiceRequest/{id}` devolve 404 ou 405 |
+| AGD-015 | Aceita `If-None-Exist` na forma literal `identifier={system}\|{value}` e na forma com `%7C` no lugar da barra vertical | Criar com cada forma e repetir com a outra: a segunda devolve 200 |
+| AGD-016 | Devolve o link de pagamento em `Appointment.extension` com a URL canônica `https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link` e `valueUrl` com esquema `https`, e em nenhum outro lugar | Agendar exame pago e inspecionar o recurso |
+| AGD-017 | Recusa `Appointment` cujo identificador do receptor tem caractere fora do conjunto permitido | 422 `INVALID_RESOURCE` |
 
 ### Resultados e registros de consentimento (provedor)
 
@@ -217,7 +246,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | RCP-011 | Não envia CPF nem outro identificador do paciente em `POST /consents` nem no PAR | Provedor de teste inspeciona as requisições |
 | RCP-012 | Depois de receber os tokens, a primeira chamada a recurso é `GET /consents/{id}` com o token de paciente | Provedor de teste registra a ordem das chamadas |
 | RCP-013 | Com `patient.cpf` diferente do CPF do paciente que iniciou a jornada, não chama a API FHIR, envia `DELETE` com `reason=PATIENT_MISMATCH` e descarta os tokens | Provedor de teste devolve outro CPF e registra as chamadas seguintes |
-| RCP-014 | No caso de RCP-013, repete o `DELETE` até conseguir e não usa os tokens enquanto isso | Provedor de teste falha o primeiro `DELETE` |
+| RCP-014 | *Retirado na 0.2.1.* Substituído por RCP-028, que limita a repetição automática e define a revogação pendente | |
 | RCP-015 | Não grava CPF em log e não usa o CPF recebido para outra finalidade | Inspeção de logs e do fluxo de dados declarado |
 | RCP-016 | Envia `x-fapi-interaction-id` novo a cada chamada | Inspeção |
 | RCP-017 | Envia `DELETE /consents/{id}` quando o paciente revoga no aplicativo e para de usar os tokens mesmo se a chamada falhar | Revogar com o provedor de teste fora do ar |
@@ -230,7 +259,18 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | RCP-024 | Oferece tela com os consentimentos do paciente e a opção de revogar | Inspeção |
 | RCP-025 | Grava os resultados somente no registro do paciente que consentiu | Inspeção do fluxo de dados declarado e amostragem |
 | RCP-026 | Ignora campos desconhecidos em respostas | Provedor de teste acrescenta campos |
+| RCP-027 | Quando a conferência do titular não pode ser feita (a leitura do consentimento falha depois das tentativas, ou vem sem `patient.cpf` válido), não conclui o vínculo, não chama a API FHIR, descarta os tokens e revoga com `reason=RECEIVER_TERMINATION` | Provedor de teste devolve 500 na leitura. Devolve 200 sem `patient`. Devolve `patient.cpf` com 10 dígitos |
+| RCP-028 | Na revogação, faz no máximo três tentativas automáticas seguidas, respeitando `Retry-After`. Persistindo a falha, grava a revogação como pendente em armazenamento durável, repete conforme o calendário da seção 4.4 e mostra a pendência ao paciente com o endereço da página do provedor | Provedor de teste fora do ar: contar tentativas, reiniciar o backend do receptor, inspecionar a tela e observar as repetições |
+| RCP-029 | Trata 404 `CONSENT_NOT_FOUND` e 422 `CONSENT_INVALID_STATE` na revogação como revogação concluída | Provedor de teste devolve cada um |
+| RCP-030 | Não segue `link` de paginação fora do `fhir_base_url` do provedor e não envia token nem certificado para esse endereço | Provedor de teste devolve `next` para outro host, para outro esquema e para caminho fora da base |
+| RCP-031 | Recusa provedor cujos metadados não trazem, ou contradizem, um valor obrigatório da seção 5.2 | Provedor de teste omite cada valor, um por vez |
+| RCP-032 | Pede `consent.manage` sempre sozinho, sem outro escopo no mesmo token | Provedor de teste inspeciona os pedidos de token |
+| RCP-033 | Com o registro local expirado, não inicia jornadas nem pede tokens de catálogo, unidades ou agenda, e continua tentando as revogações pendentes | Deixar o registro expirar com uma revogação pendente |
+| RCP-034 | Não usa um token de acesso depois de decorrido o `expires_in` informado | Provedor de teste emite token de 300 segundos e observa as chamadas |
+| RCP-035 | Lê o link de pagamento somente da extensão de URL canônica `payment-link` e só o abre se o esquema for `https` | Provedor de teste devolve link com `http`, e link em outro elemento |
+| RCP-036 | Envia `If-None-Exist` na forma literal `identifier={system}\|{value}`, com `value` restrito ao conjunto de caracteres da seção 5.5.5 | Provedor de teste inspeciona o cabeçalho |
+| RCP-037 | Calcula a versão efetiva pela regra da seção 9.1 e não oferece ao paciente provedor sem versão efetiva | Registro com provedor `0.3` e receptor `0.2` |
 
-São 141 requisitos: 6 de registro, 8 de transporte e chaves, 25 do servidor de autorização, 24 de consentimento, 11 comuns da API, 12 de catálogo, unidades e agenda, 14 de agendamento, 9 de resultados e registros de consentimento, 6 de erros e 26 do receptor (contados por script sobre este arquivo).
+São 162 identificadores, dos quais 2 retirados e 160 em vigor (contados por script sobre este arquivo). A versão 0.2.1 acrescentou REG-007 a REG-010, AUT-026, AUT-027, API-012, AGD-015 a AGD-017 e RCP-027 a RCP-037.
 
-RCP-002, RCP-015, RCP-023 e RCP-025 não se provam só com teste de caixa-preta. Uma suíte automatizada cobre os demais, e esses quatro pedem inspeção ou declaração auditável. O mesmo vale, do lado do provedor, para AUT-024, CNS-008 e CNS-023, que dependem de olhar telas.
+RCP-002, RCP-015, RCP-023, RCP-025 e a parte de tela de RCP-028 não se provam só com teste de caixa-preta. Uma suíte automatizada cobre os demais, e esses pedem inspeção ou declaração auditável. O mesmo vale, do lado do provedor, para AUT-024, CNS-008 e CNS-023, que dependem de olhar telas.

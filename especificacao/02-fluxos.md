@@ -74,6 +74,7 @@ O receptor **não** envia o CPF ao provedor em nenhum passo.
 11. O backend compara `patient.cpf` com o CPF do paciente que iniciou a jornada no aplicativo.
     - Iguais: o vínculo está concluído.
     - Diferentes: o receptor DEVE revogar o consentimento com `DELETE {api_base_url}/consents/{consent_id}?reason=PATIENT_MISMATCH`, descartar os tokens e o CPF recebido, e não fazer nenhuma chamada à API FHIR com aquele token. O paciente é avisado de que a conta usada no laboratório é de outra pessoa.
+    - Conferência impossível (a leitura do passo 10 falha, ou vem sem um `patient.cpf` válido): o receptor não conclui o vínculo, descarta os tokens e revoga com `reason=RECEIVER_TERMINATION`. Ele não usa `PATIENT_MISMATCH`, porque nenhuma divergência foi observada. As condições exatas estão em [04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4.
 
 A conferência fica com o receptor porque é ele quem sabe em qual registro os dados vão ser gravados. Ela impede que os resultados de quem fez login no laboratório (um familiar no mesmo aparelho, por exemplo) acabem no registro de outro paciente. A razão de o CPF vir pela leitura do consentimento, e não pela resposta do token ou pelo redirecionamento, está em [07-perfil-de-seguranca.md](07-perfil-de-seguranca.md), seção 7.7.
 
@@ -114,6 +115,10 @@ sequenceDiagram
     R->>RS: DELETE consents/ID?reason=PATIENT_MISMATCH com token de provedor
     RS-->>R: 204, consentimento REVOKED
     R->>R: Descarta tokens e CPF recebido, sem chamar a API FHIR
+    else Leitura falhou ou veio sem patient.cpf válido
+    R->>R: Não conclui o vínculo e descarta os tokens
+    R->>RS: DELETE consents/ID?reason=RECEIVER_TERMINATION com token de provedor
+    RS-->>R: 204, consentimento REVOKED
     end
 ```
 
@@ -233,11 +238,13 @@ sequenceDiagram
 
 O paciente revoga na tela de consentimentos do aplicativo, ou o receptor encerra o vínculo por conta própria (por exemplo, exclusão da conta, ou CPF divergente no fluxo 2.2).
 
-1. O receptor envia `DELETE {api_base_url}/consents/{consent_id}?reason=PATIENT_REQUEST` com um token de provedor (`consent.manage`).
-2. O provedor passa o consentimento a `REVOKED` e invalida o refresh token e os tokens de acesso ligados a ele.
-3. O receptor descarta os tokens. Chamadas posteriores com eles recebem 401.
+1. O receptor descarta os tokens do consentimento e para de chamar a API FHIR com ele. Isso acontece antes da chamada ao provedor e não depende dela.
+2. O receptor envia `DELETE {api_base_url}/consents/{consent_id}?reason=PATIENT_REQUEST` com um token de provedor cujo único escopo é `consent.manage`.
+3. O provedor passa o consentimento a `REVOKED` e invalida o refresh token e os tokens de acesso ligados a ele. Chamadas posteriores com eles recebem 401.
 
-O receptor DEVE enviar a revogação ao provedor assim que o paciente a pedir, e DEVE parar de usar os tokens mesmo que a chamada falhe. Se falhar, repete até conseguir.
+Se a chamada falha, o receptor faz no máximo três tentativas automáticas, com recuo e respeitando `Retry-After`. Persistindo a falha, a revogação fica **pendente**: gravada de forma durável, repetida ao menos uma vez por hora no primeiro dia e ao menos uma vez por dia depois, e mostrada ao paciente junto com o endereço da página de consentimentos do provedor, onde ele pode revogar diretamente. As regras estão em [04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Revogação pendente".
+
+Um registro de participantes expirado não impede a revogação nos 7 dias seguintes ao vencimento ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3).
 
 ```mermaid
 sequenceDiagram
@@ -248,12 +255,17 @@ sequenceDiagram
     participant AS as Servidor de autorização (provedor)
     Note over P,R: O paciente age dentro do aplicativo do receptor, com o login do aplicativo. A senha do laboratório não é pedida nem usada.
     P->>R: Revogar o acesso ao laboratório
-    R->>RS: DELETE consents/ID?reason=PATIENT_REQUEST<br/>com token de provedor
+    R->>R: Descarta os tokens do consentimento<br/>e para de chamar a API FHIR
+    R->>RS: DELETE consents/ID?reason=PATIENT_REQUEST<br/>com token de provedor só com consent.manage
+    alt Provedor responde
     RS->>RS: Consentimento passa a REVOKED
     RS->>AS: Invalida refresh token e tokens de acesso
     RS-->>R: 204
-    R->>R: Descarta os tokens do consentimento
     R-->>P: Acesso revogado
+    else Falha em três tentativas com recuo
+    R->>R: Grava a revogação como pendente<br/>e agenda novas tentativas
+    R-->>P: O aplicativo já parou de acessar. Revogação pendente no laboratório.<br/>Mostra o endereço da página de consentimentos do provedor
+    end
 ```
 
 ## 2.7 Revogação pelo lado do provedor
