@@ -87,6 +87,8 @@ export class RegistroDoProvedor {
     const pular: PassoDeVerificacao[] = [];
     if (this.cfg.violacoes.has('registro-sem-conferir-assinatura')) pular.push('V6');
     if (this.cfg.violacoes.has('registro-aceita-sequencia-menor')) pular.push('V9');
+    if (this.cfg.violacoes.has('registro-sem-schema')) pular.push('V7');
+    if (this.cfg.violacoes.has('registro-sem-conferir-ambiente')) pular.push('V8');
     const r = await verificarCandidato({
       bytes,
       jws,

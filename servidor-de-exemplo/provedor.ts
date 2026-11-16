@@ -124,6 +124,14 @@ export class Provedor {
     this.registro = registro;
     this.log = log;
     this.dados = new DadosSinteticos(relogio.agoraMs());
+    if (cfg.violacoes.has('preco-sem-exame')) {
+      const base = [...this.dados.tipo('ChargeItemDefinition').values()][0]!;
+      this.dados.gravar({ ...structuredClone(base.recurso), id: 'preco-orfao', url: 'https://laboratorio.example/fhir/ChargeItemDefinition/preco-orfao', code: { coding: [{ system: 'https://laboratorio.example/fhir/produtos', code: 'NAO-EXISTE' }] } }, base.atualizadoEm);
+    }
+    if (cfg.violacoes.has('observacao-sem-loinc')) {
+      const obs = this.dados.tipo('Observation').get('obs-ana-2026-rotina-gli')!;
+      obs.recurso = { ...obs.recurso, code: { coding: [{ system: 'https://laboratorio.example/fhir/produtos', code: 'GLI', display: 'Glicose' }] } };
+    }
     registro.aoAceitar = (_anterior, novo) => {
       // T13: receptor retirado do registro tem os consentimentos AUTHORISED revogados.
       for (const p of novo.participants) {
@@ -214,7 +222,7 @@ export class Provedor {
     if (c.status === 'AUTHORISED' && c.codigoPendente && agora >= c.codigoPendente.expiraEm) {
       this.transicionar(c, 'REVOKED', 'TECHNICAL_ISSUE', 'SYSTEM', c.codigoPendente.expiraEm);
     }
-    if (c.status === 'AUTHORISED' && agora >= c.expiraEm) {
+    if (c.status === 'AUTHORISED' && agora >= c.expiraEm && !this.violacao('consentimento-nao-expira')) {
       this.transicionar(c, 'EXPIRED', 'MAX_DATE_REACHED', 'SYSTEM', c.expiraEm);
     }
   }
@@ -238,7 +246,7 @@ export class Provedor {
     };
     if (c.data_period) corpo.data_period = c.data_period;
     if (c.status_reason && ESTADOS_FINAIS.includes(c.status)) corpo.status_reason = c.status_reason;
-    if (comPaciente && c.paciente) corpo.patient = { cpf: c.paciente.cpf, fhir_id: c.paciente.fhirId };
+    if (comPaciente && c.paciente) corpo.patient = { cpf: this.violacao('cpf-errado-na-leitura') ? '00000000191' : c.paciente.cpf, fhir_id: c.paciente.fhirId };
     return corpo;
   }
 

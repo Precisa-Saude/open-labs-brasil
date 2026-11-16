@@ -34,7 +34,8 @@ function definirPagamento(reg: Registro, valor: { token: string; ate: number } |
 }
 
 function linkDePagamento(provedor: Provedor, token: string): string {
-  return `${provedor.issuer.replace(/\/$/, '')}/pagamento/${token}`;
+  const base = provedor.violacao('link-de-pagamento-http') ? provedor.issuer.replace(/^https:/, 'http:') : provedor.issuer;
+  return `${base.replace(/\/$/, '')}/pagamento/${token}`;
 }
 
 function semExtensaoDePagamento(extensoes: unknown): Json[] {
@@ -53,6 +54,7 @@ function aplicarLink(provedor: Provedor, recurso: Recurso, token: string | undef
 }
 
 function mudarSlot(provedor: Provedor, slotId: string, status: 'free' | 'busy'): void {
+  if (status === 'free' && provedor.violacao('horario-nao-liberado')) return;
   const reg = provedor.dados.tipo('Slot').get(slotId);
   if (!reg || reg.recurso.status === status) return;
   provedor.dados.atualizar(reg, { ...reg.recurso, status }, provedor.relogio.agoraMs());
@@ -70,6 +72,7 @@ function cancelar(provedor: Provedor, reg: Registro, recurso: Recurso): void {
 
 /** Agendamentos pendentes de pagamento além do prazo passam a cancelled. */
 export function expirarPagamentos(provedor: Provedor): void {
+  if (provedor.violacao('pagamento-nao-vence')) return;
   const agora = provedor.relogio.agoraMs();
   for (const reg of provedor.dados.tipo('Appointment').values()) {
     const p = registroDoPagamento(reg);
@@ -125,9 +128,10 @@ const PADRAO_SISTEMA = /^https:\/\/[A-Za-z0-9\-._~:/]+$/;
 const PADRAO_VALOR = /^[A-Za-z0-9\-._~]{1,64}$/;
 
 /** Formato de If-None-Exist (seção 5.5.5): literal ou com a barra e o system codificados por %. */
-function lerIfNoneExist(valor: string | undefined): { system: string; value: string } {
+function lerIfNoneExist(valor: string | undefined, soLiteral = false): { system: string; value: string } {
   const falha = (t: string) => new ErroDeApi(400, 'IF_NONE_EXIST_REQUIRED', 'required', t);
   if (!valor) throw falha('POST /Appointment exige o cabeçalho If-None-Exist.');
+  if (soLiteral && valor.includes('%')) throw falha('If-None-Exist codificado não aceito.');
   if (!valor.startsWith('identifier=') || valor.includes('&') || /\s/.test(valor)) {
     throw falha('If-None-Exist precisa ter exatamente um parâmetro identifier.');
   }
@@ -155,12 +159,13 @@ function validarAgendamento(provedor: Provedor, c: Consentimento, corpo: Json, c
   const participantes = (corpo.participant as Participante[] | undefined) ?? [];
   const contidos = (corpo.contained as Json[] | undefined) ?? [];
   const pacientes = participantes.filter((p) => p.actor?.type === 'Patient');
-  for (const p of pacientes) {
+  const conferirPaciente = !provedor.violacao('paciente-do-agendamento-livre');
+  for (const p of conferirPaciente ? pacientes : []) {
     if (!referenciaDoPaciente(p.actor, c, base)) {
       throw new ErroDeApi(422, 'PATIENT_NOT_IN_CONSENT', 'business-rule', 'O agendamento referencia paciente diferente do paciente do consentimento.', { expressao: ['Appointment.participant.actor'] });
     }
   }
-  for (const sr of contidos) {
+  for (const sr of conferirPaciente ? contidos : []) {
     if (sr.subject && !referenciaDoPaciente(sr.subject as Referencia, c, base)) {
       throw new ErroDeApi(422, 'PATIENT_NOT_IN_CONSENT', 'business-rule', 'Um pedido contido referencia paciente diferente do paciente do consentimento.', { expressao: ['Appointment.contained.subject'] });
     }
@@ -179,7 +184,8 @@ function validarAgendamento(provedor: Provedor, c: Consentimento, corpo: Json, c
     if (!PADRAO_VALOR.test(value)) throw invalido('identifier.value fora do conjunto A-Z, a-z, 0-9, -, ., _, ~ ou com mais de 64 caracteres.', 'Appointment.identifier.value');
   }
 
-  if (contidos.length === 0 || contidos.some((x) => x.resourceType !== 'ServiceRequest')) {
+  const semPedido = provedor.violacao('aceita-sem-pedido-contido');
+  if (!semPedido && (contidos.length === 0 || contidos.some((x) => x.resourceType !== 'ServiceRequest'))) {
     throw invalido('O agendamento precisa de ao menos um ServiceRequest em contained, e só deles (br-lab-appointment-contained-request).', 'Appointment.contained');
   }
   const ids = new Set<string>();
@@ -194,16 +200,16 @@ function validarAgendamento(provedor: Provedor, c: Consentimento, corpo: Json, c
     if (codings.length === 0) throw invalido('Pedido contido sem code.coding.', 'Appointment.contained.code');
   }
   const basedOn = (corpo.basedOn as Referencia[] | undefined) ?? [];
-  if (basedOn.length === 0) throw invalido('basedOn é obrigatório.', 'Appointment.basedOn');
+  if (basedOn.length === 0 && !semPedido) throw invalido('basedOn é obrigatório.', 'Appointment.basedOn');
   const apontados = new Set<string>();
   for (const b of basedOn) {
     const ref = b.reference;
-    if (!ref || !ref.startsWith('#') || !ids.has(ref.slice(1))) {
+    if (!semPedido && (!ref || !ref.startsWith('#') || !ids.has(ref.slice(1)))) {
       throw invalido('Cada basedOn precisa ser referência local a um ServiceRequest contido (br-lab-appointment-based-on-contained).', 'Appointment.basedOn');
     }
-    apontados.add(ref.slice(1));
+    if (ref) apontados.add(ref.slice(1));
   }
-  for (const id of ids) if (!apontados.has(id)) throw invalido('Todo pedido contido precisa de um basedOn que aponte para ele.', 'Appointment.contained');
+  for (const id of ids) if (!apontados.has(id) && !semPedido) throw invalido('Todo pedido contido precisa de um basedOn que aponte para ele.', 'Appointment.contained');
 
   if (pacientes.length !== 1) throw invalido('O agendamento precisa de exatamente um participante com actor.type Patient.', 'Appointment.participant');
   const unidades = participantes.filter((p) => p.actor?.type === 'Location');
@@ -240,7 +246,7 @@ function conferirHorario(provedor: Provedor, v: AgendamentoValidado, corpo: Json
   if (Date.parse(String(corpo.start)) !== Date.parse(String(slot.recurso.start)) || Date.parse(String(corpo.end)) !== Date.parse(String(slot.recurso.end))) {
     throw invalido('start e end precisam ser os do horário.', 'Appointment.start');
   }
-  if (slot.recurso.status !== 'free' && v.slotId !== slotAtual) {
+  if (slot.recurso.status !== 'free' && v.slotId !== slotAtual && !provedor.violacao('horario-ocupado-aceito')) {
     throw new ErroDeApi(409, 'SLOT_UNAVAILABLE', 'conflict', 'O horário escolhido não está mais disponível.', { diagnostico: `Slot/${v.slotId} não está livre.` });
   }
   const tipos = (slot.recurso.serviceType as Array<{ coding: Array<{ system: string; code: string }> }>) ?? [];
@@ -275,7 +281,7 @@ function responder(provedor: Provedor, res: ServerResponse, status: number, reg:
   r.meta = meta;
   enviarFhir(res, status, r, {
     Location: `${base}/Appointment/${reg.recurso.id}/_history/${reg.versao}`,
-    ETag: `W/"${reg.versao}"`,
+    ...(status === 201 && provedor.violacao('criacao-sem-etag') ? {} : { ETag: `W/"${reg.versao}"` }),
     'Last-Modified': new Date(reg.atualizadoEm).toUTCString(),
   });
 }
@@ -284,7 +290,7 @@ export async function tratarCriacaoDeAgendamento(provedor: Provedor, acesso: Ace
   expirarPagamentos(provedor);
   exigirConteudo(req, 'application/fhir+json');
   const cabecalhoIne = cabecalho(req, 'if-none-exist');
-  const pedido = provedor.violacao('criacao-nao-idempotente') && !cabecalhoIne ? undefined : lerIfNoneExist(cabecalhoIne);
+  const pedido = provedor.violacao('criacao-nao-idempotente') && !cabecalhoIne ? undefined : lerIfNoneExist(cabecalhoIne, provedor.violacao('if-none-exist-so-literal'));
   const corpo = lerJson(await lerCorpo(req));
   const v = validarAgendamento(provedor, c, corpo, true);
   if (pedido && (pedido.system !== v.identificador.system || pedido.value !== v.identificador.value)) {

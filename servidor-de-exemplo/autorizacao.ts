@@ -47,8 +47,9 @@ export function metadados(provedor: Provedor): Record<string, unknown> {
   return doc;
 }
 
-function enviarErroOAuth(res: ServerResponse, erro: ErroOAuth) {
-  enviarJson(res, erro.status, { error: erro.erro, ...(erro.descricao ? { error_description: erro.descricao } : {}) }, CABECALHOS_SEM_CACHE);
+function enviarErroOAuth(res: ServerResponse, erro: ErroOAuth, provedor?: Provedor) {
+  const codigo = provedor?.violacao('erro-oauth-inventado') && erro.erro === 'invalid_client' ? 'client_not_trusted' : erro.erro;
+  enviarJson(res, erro.status, { error: codigo, ...(erro.descricao ? { error_description: erro.descricao } : {}) }, CABECALHOS_SEM_CACHE);
 }
 
 async function lerFormularioOAuth(req: IncomingMessage): Promise<Map<string, string[]>> {
@@ -77,7 +78,7 @@ export async function tratarPar(provedor: Provedor, req: IncomingMessage, res: S
     }
     if (form.has('request') || form.has('request_uri')) throw new ErroOAuth(400, 'invalid_request', 'objeto de requisição não é usado');
     const responseType = valor(form, 'response_type', true);
-    if (responseType !== 'code') throw new ErroOAuth(400, 'invalid_request', 'response_type precisa ser code');
+    if (responseType !== 'code' && !provedor.violacao('aceita-response-type-token')) throw new ErroOAuth(400, 'invalid_request', 'response_type precisa ser code');
     const redirectUri = valor(form, 'redirect_uri', true)!;
     const registrados = cliente.receptor.receiver!.redirect_uris;
     const redirectValido = registrados.includes(redirectUri) ||
@@ -95,7 +96,7 @@ export async function tratarPar(provedor: Provedor, req: IncomingMessage, res: S
     if (dinamicos.length !== 1) throw new ErroOAuth(400, 'invalid_request', 'escopo consent:{id} ausente ou repetido');
     const consentId = dinamicos[0]!.slice('consent:'.length);
     const consentimento = provedor.consentimento(consentId);
-    if (!consentimento || consentimento.client_id !== cliente.clientId || consentimento.status !== 'AWAITING_AUTHORISATION') {
+    if (!consentimento || (consentimento.client_id !== cliente.clientId && !provedor.violacao('par-aceita-consentimento-de-outro')) || consentimento.status !== 'AWAITING_AUTHORISATION') {
       throw new ErroOAuth(400, 'invalid_request', 'consent:{id} desconhecido, de outro cliente ou fora de AWAITING_AUTHORISATION');
     }
     const outros = escopos.filter((s) => !s.startsWith('consent:'));
@@ -104,7 +105,7 @@ export async function tratarPar(provedor: Provedor, req: IncomingMessage, res: S
     for (const s of outros) {
       if (!(TODOS_OS_ESCOPOS as readonly string[]).includes(s)) throw new ErroOAuth(400, 'invalid_scope', 'escopo desconhecido');
       if ((ESCOPOS_DE_PROVEDOR as readonly string[]).includes(s)) throw new ErroOAuth(400, 'invalid_scope', 'escopo de provedor em requisição de autorização');
-      if (!consentimento.scopes.includes(s as Escopo)) throw new ErroOAuth(400, 'invalid_scope', 'escopo fora do consentimento');
+      if (!consentimento.scopes.includes(s as Escopo) && !provedor.violacao('par-aceita-escopo-fora-do-consentimento')) throw new ErroOAuth(400, 'invalid_scope', 'escopo fora do consentimento');
     }
     const par: PedidoPar = {
       requestUri: `urn:ietf:params:oauth:request_uri:${segredo()}`,
@@ -120,7 +121,7 @@ export async function tratarPar(provedor: Provedor, req: IncomingMessage, res: S
     provedor.pedidosPar.set(par.requestUri, par);
     enviarJson(res, 201, { request_uri: par.requestUri, expires_in: VALIDADE_DO_REQUEST_URI_S }, CABECALHOS_SEM_CACHE);
   } catch (e) {
-    if (e instanceof ErroOAuth) return enviarErroOAuth(res, e);
+    if (e instanceof ErroOAuth) return enviarErroOAuth(res, e, provedor);
     throw e;
   }
 }
@@ -188,7 +189,7 @@ export function concluirAutorizacao(provedor: Provedor, par: PedidoPar, paciente
   }
   provedor.transicionar(c, 'AUTHORISED');
   const codigo = provedor.emitirCodigo(par, c);
-  return redirecionar(provedor, par, { code: codigo.code });
+  return redirecionar(provedor, par, { code: codigo.code, ...(provedor.violacao('cpf-no-redirecionamento') ? { cpf: paciente.cpf } : {}) });
 }
 
 export function iniciarAutorizacaoPorControle(provedor: Provedor, clientId: string, requestUri: string): PedidoPar {
@@ -281,6 +282,7 @@ export async function tratarToken(provedor: Provedor, req: IncomingMessage, res:
         const dePaciente = (ESCOPOS_DE_PACIENTE as readonly string[]).includes(s);
         if (dePaciente && provedor.violacao('escopo-de-paciente-em-client-credentials')) continue;
         if (!(ESCOPOS_DE_PROVEDOR as readonly string[]).includes(s)) throw new ErroOAuth(400, 'invalid_scope', 'escopo desconhecido ou de paciente em client_credentials');
+        if (s === 'schedule.read' && provedor.violacao('recusa-schedule-read')) throw new ErroOAuth(400, 'invalid_scope', 'schedule.read não atendido');
         if (!receptor.scopes_allowed.includes(s as Escopo) || !suportados.includes(s as Escopo)) throw new ErroOAuth(400, 'invalid_scope', 'escopo fora do permitido ao receptor');
       }
       if (escopos.includes('consent.manage') && escopos.length > 1) throw new ErroOAuth(400, 'invalid_scope', 'consent.manage vai sempre sozinho');
@@ -369,7 +371,7 @@ export async function tratarToken(provedor: Provedor, req: IncomingMessage, res:
     }
     throw new ErroOAuth(400, 'unsupported_grant_type', 'concessão não suportada');
   } catch (e) {
-    if (e instanceof ErroOAuth) return enviarErroOAuth(res, e);
+    if (e instanceof ErroOAuth) return enviarErroOAuth(res, e, provedor);
     throw e;
   }
 }
@@ -388,7 +390,7 @@ export async function tratarRevogacaoDeToken(provedor: Provedor, req: IncomingMe
     if (rt && rt.clientId === cliente.clientId) rt.revogado = true;
     enviarVazio(res, 200, CABECALHOS_SEM_CACHE);
   } catch (e) {
-    if (e instanceof ErroOAuth) return enviarErroOAuth(res, e);
+    if (e instanceof ErroOAuth) return enviarErroOAuth(res, e, provedor);
     throw e;
   }
 }

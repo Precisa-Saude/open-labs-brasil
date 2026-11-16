@@ -38,7 +38,8 @@ export function exigirCertificado(provedor: Provedor, req: IncomingMessage): { x
 /** Certificado, token, vínculo e consentimento (seção 6.5, regra 1). */
 export function autenticarRecurso(provedor: Provedor, req: IncomingMessage, url: URL): Acesso {
   const { x5t, receptor: donoDoCertificado } = exigirCertificado(provedor, req);
-  const autorizacao = cabecalho(req, 'authorization');
+  let autorizacao = cabecalho(req, 'authorization');
+  if (!autorizacao && provedor.violacao('token-na-url') && url.searchParams.get('access_token')) autorizacao = `Bearer ${url.searchParams.get('access_token')}`;
   if (!autorizacao) {
     throw erroDeToken(provedor, 401, 'TOKEN_MISSING', 'login', 'Requisição sem token de acesso no cabeçalho Authorization.');
   }
@@ -65,7 +66,7 @@ export function autenticarRecurso(provedor: Provedor, req: IncomingMessage, url:
   }
   const receptor = donoDoCertificado ?? provedor.registro.receptor(token.clientId);
   if (!receptor) throw new ErroDeApi(403, 'RECEIVER_NOT_ALLOWED', 'forbidden', 'O provedor não atende este receptor.');
-  if (url.searchParams.has('access_token')) {
+  if (url.searchParams.has('access_token') && !provedor.violacao('token-na-url')) {
     throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', 'Token de acesso não é aceito na URL.');
   }
   // Limite de chamadas por token (seção 7.11): janela de um minuto.
@@ -75,13 +76,14 @@ export function autenticarRecurso(provedor: Provedor, req: IncomingMessage, url:
     token.janela.chamadas++;
     if (token.janela.chamadas > provedor.cfg.limitePorMinuto) {
       const espera = Math.max(1, Math.ceil((token.janela.inicio + 60_000 - agora) / 1000));
-      throw new ErroDeApi(429, 'RATE_LIMITED', 'throttled', 'Limite de chamadas excedido.', { cabecalhos: { 'Retry-After': String(espera) } });
+      throw new ErroDeApi(429, 'RATE_LIMITED', 'throttled', 'Limite de chamadas excedido.', { cabecalhos: provedor.violacao('sem-retry-after') ? {} : { 'Retry-After': String(espera) } });
     }
   }
   return { receptor, clientId: receptor.participant_id, token, x5t };
 }
 
 export function exigirEscopo(provedor: Provedor, acesso: Acesso, tipo: 'provedor' | 'paciente', escopo?: string): void {
+  if (provedor.violacao('escopo-nao-conferido')) return;
   const ok = acesso.token.tipo === tipo && (escopo === undefined || acesso.token.escopos.includes(escopo));
   if (!ok) {
     throw erroDeToken(provedor, 403, 'SCOPE_INSUFFICIENT', 'forbidden', 'O token não tem o escopo exigido por este recurso.', 'insufficient_scope');

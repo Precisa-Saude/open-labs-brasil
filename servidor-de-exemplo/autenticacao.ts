@@ -93,8 +93,9 @@ export async function autenticarCliente(
   req: IncomingMessage,
   form: Map<string, string[]>,
 ): Promise<ClienteAutenticado> {
-  const x5t = x5tDaConexao(req);
-  if (!x5t) throw invalido('certificado de cliente ausente');
+  const x5tDaConexaoAtual = x5tDaConexao(req);
+  if (!x5tDaConexaoAtual && !provedor.violacao('aceita-sem-certificado')) throw invalido('certificado de cliente ausente');
+  const x5t = x5tDaConexaoAtual ?? 'sem-certificado';
 
   const umValor = (nome: string) => {
     const v = form.get(nome);
@@ -105,6 +106,10 @@ export async function autenticarCliente(
   if (req.headers.authorization?.toLowerCase().startsWith('basic ')) throw invalido('método de autenticação não suportado');
   const tipo = umValor('client_assertion_type');
   const assercao = umValor('client_assertion');
+  if (!assercao && provedor.violacao('par-sem-autenticacao')) {
+    const receptorSemAssercao = provedor.registro.receptor(umValor('client_id') ?? '');
+    if (receptorSemAssercao) return { receptor: receptorSemAssercao, clientId: receptorSemAssercao.participant_id, x5t };
+  }
   if (tipo !== TIPO_DE_ASSERCAO || !assercao) throw invalido('autenticação do cliente ausente: use private_key_jwt');
 
   let cabecalho: ReturnType<typeof decodeProtectedHeader>;
@@ -129,10 +134,10 @@ export async function autenticarCliente(
 
   // Certificado da conexão: do mesmo cliente, no registro e dentro da validade.
   const donoDoCertificado = provedor.registro.receptorDoCertificado(x5t);
-  if (!donoDoCertificado && !provedor.violacao('aceita-certificado-fora-do-registro')) {
+  if (!donoDoCertificado && !provedor.violacao('aceita-certificado-fora-do-registro') && !provedor.violacao('aceita-sem-certificado')) {
     throw invalido('certificado de cliente fora do registro');
   }
-  if (donoDoCertificado && donoDoCertificado.participant_id !== receptor.participant_id) {
+  if (donoDoCertificado && donoDoCertificado.participant_id !== receptor.participant_id && !provedor.violacao('certificado-de-outro-cliente')) {
     throw invalido('certificado registrado para outro cliente');
   }
 
@@ -164,7 +169,7 @@ export async function autenticarCliente(
     : provedor.violacao('aud-em-lista') && Array.isArray(aud) && aud.includes(provedor.issuer);
   if (!audValido) throw invalido('aud da asserção precisa ser o issuer, como texto simples');
   if (typeof corpo.iat !== 'number') throw invalido('asserção sem iat');
-  if (corpo.iat > agoraS + 10) throw invalido('iat da asserção no futuro');
+  if (corpo.iat > agoraS + (provedor.violacao('iat-sem-tolerancia') ? 0 : 10)) throw invalido('iat da asserção no futuro');
   if (typeof corpo.exp !== 'number') throw invalido('asserção sem exp');
   if (corpo.exp - corpo.iat > 60) throw invalido('validade da asserção maior que 60 segundos');
   if (typeof corpo.jti !== 'string' || corpo.jti.length === 0) throw invalido('asserção sem jti');

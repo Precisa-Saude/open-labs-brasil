@@ -44,6 +44,7 @@ function validarCriacao(provedor: Provedor, acesso: Acesso | undefined, bruto: B
     }
   }
   if (!Array.isArray(obj.scopes) || obj.scopes.some((s) => typeof s !== 'string')) throw invalida('scopes precisa ser uma lista de textos.', 'scopes');
+  if (obj.purpose === undefined && provedor.violacao('purpose-opcional')) obj.purpose = 'Sem finalidade (violação deliberada).';
   if (typeof obj.purpose !== 'string') throw invalida('purpose é obrigatório.', 'purpose');
   if (obj.purpose.length < 10 || obj.purpose.length > 300) throw invalida('purpose precisa ter de 10 a 300 caracteres.', 'purpose');
   if (typeof obj.expiration_date_time !== 'string' || !PADRAO_INSTANTE.test(obj.expiration_date_time) || Number.isNaN(Date.parse(obj.expiration_date_time))) {
@@ -71,7 +72,7 @@ function validarCriacao(provedor: Provedor, acesso: Acesso | undefined, bruto: B
   const escoposInvalidos =
     scopes.length === 0 ||
     new Set(scopes).size !== scopes.length ||
-    scopes.some((s) => !(ESCOPOS_DE_PACIENTE as readonly string[]).includes(s) || !permitidos.includes(s as Escopo) || !suportados.includes(s as Escopo));
+    scopes.some((s) => (!(ESCOPOS_DE_PACIENTE as readonly string[]).includes(s) && !provedor.violacao('consentimento-aceita-escopo-de-provedor')) || !permitidos.includes(s as Escopo) || !suportados.includes(s as Escopo));
   if (escoposInvalidos) {
     throw new ErroDeApi(422, 'CONSENT_INVALID_SCOPES', 'business-rule', 'scopes precisa ter ao menos um escopo de paciente suportado e permitido ao receptor, sem repetição.');
   }
@@ -79,7 +80,7 @@ function validarCriacao(provedor: Provedor, acesso: Acesso | undefined, bruto: B
   const expiraEm = Date.parse(obj.expiration_date_time);
   const hoje = new Date(agora);
   const limite = Date.UTC(hoje.getUTCFullYear() + 1, hoje.getUTCMonth(), hoje.getUTCDate(), hoje.getUTCHours(), hoje.getUTCMinutes(), hoje.getUTCSeconds());
-  if (expiraEm <= agora || expiraEm > limite) {
+  if (expiraEm <= agora || (expiraEm > limite && !provedor.violacao('consentimento-sem-limite-de-validade'))) {
     throw new ErroDeApi(422, 'CONSENT_INVALID_EXPIRATION', 'business-rule', 'expiration_date_time precisa estar no futuro e a no máximo 12 meses.');
   }
   return { scopes: scopes as Escopo[], purpose: obj.purpose, expiraEm, ...(dataPeriod ? { data_period: dataPeriod } : {}) };
@@ -117,13 +118,17 @@ export async function tratarConsentimentos(provedor: Provedor, req: IncomingMess
       exigirIdDeInteracao(provedor, req);
       exigirAccept(req, 'application/json');
       if (acesso.token.tipo === 'paciente') {
-        if (acesso.token.consentId !== id) throw new ErroDeApi(404, 'CONSENT_NOT_FOUND', 'not-found', 'Consentimento não encontrado.');
-        const c = provedor.consentimento(id)!;
+        if (acesso.token.consentId !== id && !provedor.violacao('token-de-paciente-le-outro-consentimento')) throw new ErroDeApi(404, 'CONSENT_NOT_FOUND', 'not-found', 'Consentimento não encontrado.');
+        const c = provedor.consentimento(id);
+        if (!c) throw new ErroDeApi(404, 'CONSENT_NOT_FOUND', 'not-found', 'Consentimento não encontrado.');
         return enviarJson(res, 200, provedor.representar(c, true));
       }
       exigirEscopo(provedor, acesso, 'provedor', 'consent.manage');
       const c = provedor.consentimento(id);
       if (!c || (c.client_id !== acesso.clientId && !provedor.violacao('consentimento-de-outro-cliente-visivel'))) {
+        throw new ErroDeApi(404, 'CONSENT_NOT_FOUND', 'not-found', 'Consentimento não encontrado.');
+      }
+      if (ESTADOS_FINAIS.includes(c.status) && provedor.violacao('estado-final-ilegivel')) {
         throw new ErroDeApi(404, 'CONSENT_NOT_FOUND', 'not-found', 'Consentimento não encontrado.');
       }
       return enviarJson(res, 200, provedor.representar(c, provedor.violacao('cpf-com-token-de-provedor')));
@@ -148,7 +153,7 @@ export async function tratarConsentimentos(provedor: Provedor, req: IncomingMess
       if (c.status === 'AWAITING_AUTHORISATION') {
         provedor.transicionar(c, 'REJECTED', 'RECEIVER_TERMINATION', 'RECEIVER');
       } else {
-        provedor.transicionar(c, 'REVOKED', motivo as (typeof MOTIVOS_DO_RECEPTOR)[number], 'RECEIVER');
+        provedor.transicionar(c, 'REVOKED', provedor.violacao('motivo-do-receptor-ignorado') ? 'PATIENT_REQUEST' : (motivo as (typeof MOTIVOS_DO_RECEPTOR)[number]), 'RECEIVER');
       }
       return enviarVazio(res, 204);
     }

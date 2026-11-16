@@ -58,8 +58,10 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
   const tls = {
     key: readFileSync(cfg.tls.chave),
     cert: readFileSync(cfg.tls.certificado),
-    minVersion: 'TLSv1.2' as const,
-    ciphers: cfg.violacoes.has('tls-com-suites-fracas') ? `${SUITES_TLS12}:${SUITES_FRACAS}` : SUITES_TLS12,
+    minVersion: cfg.violacoes.has('aceita-tls-1-1') ? ('TLSv1.1' as const) : ('TLSv1.2' as const),
+    ciphers: cfg.violacoes.has('aceita-tls-1-1')
+      ? `${SUITES_TLS12}:ECDHE-RSA-AES128-SHA:@SECLEVEL=0`
+      : cfg.violacoes.has('tls-com-suites-fracas') ? `${SUITES_TLS12}:${SUITES_FRACAS}` : SUITES_TLS12,
     honorCipherOrder: true,
   };
 
@@ -75,6 +77,7 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
     cabecalhosComuns(res, provedor);
     const url = new URL(req.url ?? '/', provedor.issuer);
     const compartilhamentos = new URL(provedor.participante.provider!.consent_management_uri).pathname;
+    if (provedor.violacao('cors-na-autorizacao') && url.pathname.startsWith('/authorize')) res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') return enviarHtml(res, 405, paginaDeErro('Método não suportado.'), { Allow: 'GET, POST' });
     if (req.method === 'GET' && url.pathname === caminhoDosMetadados(provedor.issuer)) {
       return enviarJson(res, 200, metadados(provedor), { 'Cache-Control': 'max-age=3600' });
@@ -93,10 +96,10 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
     const fhir = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
     if (provedor.emManutencao) {
       if (['/par', '/token', '/revoke'].includes(url.pathname)) {
-        return enviarJson(res, 503, { error: 'temporarily_unavailable', error_description: 'manutenção simulada' }, { 'Retry-After': '30', 'Cache-Control': 'no-store' });
+        return enviarJson(res, 503, { error: 'temporarily_unavailable', error_description: 'manutenção simulada' }, provedor.violacao('sem-retry-after') ? { 'Cache-Control': 'no-store' } : { 'Retry-After': '30', 'Cache-Control': 'no-store' });
       }
       return comTratamentoDeErros(provedor, req, res, async () => {
-        throw new ErroDeApi(503, 'PROVIDER_UNAVAILABLE', 'transient', 'Provedor em manutenção (simulada).', { cabecalhos: { 'Retry-After': '30' } });
+        throw new ErroDeApi(503, 'PROVIDER_UNAVAILABLE', 'transient', 'Provedor em manutenção (simulada).', { cabecalhos: provedor.violacao('sem-retry-after') ? {} : { 'Retry-After': '30' } });
       });
     }
     if (url.pathname === '/par') return tratarPar(provedor, req, res);

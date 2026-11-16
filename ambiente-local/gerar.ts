@@ -10,6 +10,7 @@
 //   node ambiente-local/gerar.ts [--saida ambiente-local/gerado] [--forcar] [--se-faltar]
 //     [--host localhost] [--host-hospedagem localhost] [--nome-extra outro.host ...]
 //     [--porta-publica 8443] [--porta-mtls 8444] [--porta-controle 8445] [--porta-hospedagem 9443]
+//     [--endereco-de-escuta 127.0.0.1]
 //
 // Tudo o que sai daqui é só para teste local. Nenhuma chave gerada aqui deve
 // ser usada em outro lugar.
@@ -42,6 +43,8 @@ export interface OpcoesDoAmbiente {
   portaMtls: number;
   portaControle: number;
   portaHospedagem: number;
+  /** Endereço em que o servidor, o controle e a hospedagem escutam. 0.0.0.0 para uso em contêiner. */
+  enderecoDeEscuta: string;
 }
 
 function instante(d: Date): string {
@@ -247,7 +250,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
   const tokenDeControle = randomBytes(24).toString('base64url');
   writeFileSync(join(dir, 'servidor.config.json'), JSON.stringify({
     participant_id: idDoProvedor,
-    endereco_de_escuta: '127.0.0.1',
+    endereco_de_escuta: o.enderecoDeEscuta,
     portas: { publica: o.portaPublica, mtls: o.portaMtls, controle: o.portaControle },
     tls: { certificado: 'pki/servidor.crt', chave: 'pki/servidor.key', ca_confiavel: 'pki/ca.crt' },
     registro: {
@@ -258,7 +261,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
       ambiente: 'pilot',
       intervalo_minutos: 30,
     },
-    controle: { habilitado: true, token: tokenDeControle, endereco_de_escuta: '127.0.0.1' },
+    controle: { habilitado: true, token: tokenDeControle, endereco_de_escuta: o.enderecoDeEscuta },
     prazo_de_pagamento_minutos: 15,
     limite_por_minuto: 120,
     violacoes: [],
@@ -277,7 +280,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
     },
     provedor: { participant_id: idDoProvedor, ca_confiavel: 'pki/ca.crt' },
     hospedagem: {
-      endereco_de_escuta: '127.0.0.1',
+      endereco_de_escuta: o.enderecoDeEscuta,
       porta: o.portaHospedagem,
       certificado: 'pki/hospedagem.crt',
       chave: 'pki/hospedagem.key',
@@ -336,6 +339,7 @@ export function opcoesDaLinhaDeComando(argv = process.argv.slice(2)): OpcoesDoAm
       'porta-mtls': { type: 'string', default: '8444' },
       'porta-controle': { type: 'string', default: '8445' },
       'porta-hospedagem': { type: 'string', default: '9443' },
+      'endereco-de-escuta': { type: 'string', default: '127.0.0.1' },
       forcar: { type: 'boolean', default: false },
       'se-faltar': { type: 'boolean', default: false },
     },
@@ -349,6 +353,7 @@ export function opcoesDaLinhaDeComando(argv = process.argv.slice(2)): OpcoesDoAm
     portaMtls: Number(values['porta-mtls']),
     portaControle: Number(values['porta-controle']),
     portaHospedagem: Number(values['porta-hospedagem']),
+    enderecoDeEscuta: values['endereco-de-escuta']!,
     forcar: values.forcar!,
     seFaltar: values['se-faltar']!,
   };

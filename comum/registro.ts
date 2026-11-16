@@ -223,11 +223,11 @@ export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise
     return recusa('V7', 'os bytes não são JSON válido');
   }
   const erro = erroDeSchema(documento);
-  if (erro) return recusa('V7', `documento inválido contra o schema: ${erro}`);
+  if (erro && !pular.has('V7')) return recusa('V7', `documento inválido contra o schema: ${erro}`);
   passos.push('V7');
 
   // V8: ambiente.
-  if (documento.environment !== entrada.ambiente) return recusa('V8', `registro do ambiente ${documento.environment}`);
+  if (documento.environment !== entrada.ambiente && !pular.has('V8')) return recusa('V8', `registro do ambiente ${documento.environment}`);
   passos.push('V8');
 
   // V9: sequência maior que N. Igual: mesmos bytes seguem, bytes diferentes são recusados.

@@ -74,6 +74,7 @@ function resultadoVisivel(reg: Registro, ctx: Contexto): boolean {
 const TIPOS: Record<string, ConfiguracaoDoTipo> = {
   ActivityDefinition: {
     tipoDeToken: 'provedor', escopo: 'catalog.read', perfil: 'br-lab-activity-definition',
+    visivel: (reg, ctx) => !(ctx.provedor.violacao('retirado-invisivel') && reg.recurso.status === 'retired'),
     parametros: {
       status: statusToken,
       url: { tipo: 'uri', extrair: (r) => [r.recurso.url] },
@@ -139,7 +140,7 @@ const TIPOS: Record<string, ConfiguracaoDoTipo> = {
       },
     },
     parametroDoPaciente: 'patient',
-    visivel: (reg, ctx) => reg.donoClientId === ctx.acesso.clientId && reg.pacienteId === ctx.pacienteId,
+    visivel: (reg, ctx) => (reg.donoClientId === ctx.acesso.clientId || ctx.provedor.violacao('agendamento-de-outro-canal-visivel')) && reg.pacienteId === ctx.pacienteId,
     interacoesDeEscrita: ['create', 'update'],
   },
   DiagnosticReport: {
@@ -234,7 +235,7 @@ function registrosDoTipo(ctx: Contexto, tipo: string): Registro[] {
     return [...ctx.provedor.consentimentos.values()]
       .filter((c) => {
         ctx.provedor.atualizarEstado(c);
-        return c.client_id === ctx.acesso.clientId && c.paciente && c.paciente.fhirId === ctx.pacienteId;
+        return (c.client_id === ctx.acesso.clientId || ctx.provedor.violacao('consentimentos-de-outros-receptores')) && c.paciente && c.paciente.fhirId === ctx.pacienteId;
       })
       .map((c) => consentimentoFhir(ctx.provedor, c));
   }
@@ -263,7 +264,7 @@ function contexto(provedor: Provedor, acesso: Acesso): Contexto {
 }
 
 function conferirPaciente(ctx: Contexto, conf: ConfiguracaoDoTipo, parametros: ParametroDaBusca[]): void {
-  if (!conf.parametroDoPaciente) return;
+  if (!conf.parametroDoPaciente || ctx.provedor.violacao('parametro-patient-ignorado')) return;
   for (const p of parametros.filter((x) => x.nome === conf.parametroDoPaciente)) {
     for (const v of p.valor.split(',')) {
       if (referenciaNormalizada(v, 'Patient', ctx.provedor.fhirBaseUrl) !== `Patient/${ctx.pacienteId}`) {
@@ -336,7 +337,7 @@ function buscar(ctx: Contexto, tipo: string, conf: ConfiguracaoDoTipo, url: URL,
     if (nome === '_count') {
       const n = Number(valor);
       if (!Number.isInteger(n) || n < 0) throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', '_count inválido.');
-      quantidade = Math.min(n, 100);
+      quantidade = provedor.violacao('count-ignorado') ? 20 : Math.min(n, 100);
       continue;
     }
     if (nome === '_getpagesoffset') {
@@ -346,20 +347,28 @@ function buscar(ctx: Contexto, tipo: string, conf: ConfiguracaoDoTipo, url: URL,
       continue;
     }
     if (nome === '_include' && tipo === 'DiagnosticReport' && valor === 'DiagnosticReport:result') {
-      incluir.push(valor);
+      if (!provedor.violacao('include-ignorado')) incluir.push(valor);
       continue;
     }
+    const ignorado =
+      (nome === 'url' && provedor.violacao('busca-por-url-ignorada')) ||
+      (nome === 'address-city' && provedor.violacao('busca-por-cidade-ignorada')) ||
+      (tipo === 'HealthcareService' && nome === 'location' && provedor.violacao('servicos-de-todas-as-unidades')) ||
+      (tipo === 'Schedule' && nome === 'actor' && provedor.violacao('agenda-de-todas-as-unidades')) ||
+      (nome === 'access_token' && provedor.violacao('token-na-url'));
+    if (ignorado) continue;
     if (!conf.parametros[nome]) {
       if (provedor.violacao('ignora-parametro-desconhecido')) continue;
       throw new ErroDeApi(400, 'UNSUPPORTED_SEARCH_PARAMETER', 'not-supported', `Parâmetro de busca não suportado: ${nome}.`);
     }
     parametros.push({ nome, valor });
   }
-  for (const o of conf.obrigatorios ?? []) {
+  const semLimites = tipo === 'Slot' && provedor.violacao('slot-sem-limites');
+  for (const o of semLimites ? [] : conf.obrigatorios ?? []) {
     if (!parametros.some((p) => p.nome === o)) throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', `Parâmetro obrigatório ausente: ${o}.`);
   }
   conferirPaciente(ctx, conf, parametros);
-  if (tipo === 'Slot') conferirJanelaDeHorarios(ctx, parametros);
+  if (tipo === 'Slot' && !semLimites) conferirJanelaDeHorarios(ctx, parametros);
 
   const entradasExtras: unknown[] = [];
   let candidatos = registrosDoTipo(ctx, tipo).filter((r) => !conf.visivel || conf.visivel(r, ctx));
@@ -367,7 +376,7 @@ function buscar(ctx: Contexto, tipo: string, conf: ConfiguracaoDoTipo, url: URL,
     const faltando = examesForaDaUnidade(ctx, parametros);
     if (faltando.length > 0) {
       candidatos = [];
-      entradasExtras.push({
+      if (!provedor.violacao('exame-indisponivel-silencioso')) entradasExtras.push({
         resource: {
           resourceType: 'OperationOutcome',
           issue: [{
@@ -434,7 +443,7 @@ export function capacidades(provedor: Provedor): Recurso {
         },
         resource: Object.entries(TIPOS).map(([tipo, conf]) => ({
           type: tipo,
-          supportedProfile: [perfil(conf.perfil)],
+          ...(provedor.violacao('capability-sem-perfis') ? {} : { supportedProfile: [perfil(conf.perfil)] }),
           interaction: [
             { code: 'read' },
             ...(conf.buscavel === false ? [] : [{ code: 'search-type' }]),
@@ -465,11 +474,20 @@ export async function tratarFhir(provedor: Provedor, req: IncomingMessage, res: 
     const acesso = autenticarRecurso(provedor, req, url);
     const [tipo, id, ...resto] = partes;
     const conf = tipo ? TIPOS[tipo] : undefined;
+    if (tipo === 'ServiceRequest' && id && resto.length === 0 && provedor.violacao('service-request-enderecavel')) {
+      const ctxSr = contexto(provedor, acesso);
+      for (const reg of provedor.dados.tipo('Appointment').values()) {
+        if (reg.pacienteId !== ctxSr.pacienteId) continue;
+        const sr = ((reg.recurso.contained as Array<{ id?: string }> | undefined) ?? []).find((c) => c.id === id);
+        if (sr) return enviarFhir(res, 200, sr);
+      }
+    }
     if (!tipo || !conf || resto.length > 0) {
       exigirIdDeInteracao(provedor, req);
       throw new ErroDeApi(404, 'RESOURCE_NOT_FOUND', 'not-found', 'Recurso inexistente.');
     }
     exigirEscopo(provedor, acesso, conf.tipoDeToken, conf.escopo);
+    if ((tipo === 'Schedule' || tipo === 'Slot') && provedor.violacao('agenda-exige-paciente')) exigirEscopo(provedor, acesso, 'paciente');
     exigirIdDeInteracao(provedor, req);
     exigirAccept(req, TIPO_FHIR);
     const ctx = contexto(provedor, acesso);
