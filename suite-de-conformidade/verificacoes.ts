@@ -54,21 +54,8 @@ export function linkProximo(bundle: Json): string | undefined {
   return ((bundle.link as Array<{ relation?: string; url?: string }> | undefined) ?? []).find((l) => l.relation === 'next')?.url;
 }
 
-/** Esquema, host, porta e prefixo de caminho em fronteira de segmento (seção 5.1). */
-export function dentroDaBase(url: string, base: string): boolean {
-  let u: URL;
-  let b: URL;
-  try {
-    u = new URL(url);
-    b = new URL(base);
-  } catch {
-    return false;
-  }
-  const porta = (x: URL) => x.port || (x.protocol === 'https:' ? '443' : '80');
-  if (u.protocol !== b.protocol || u.hostname !== b.hostname || porta(u) !== porta(b)) return false;
-  const prefixo = b.pathname.replace(/\/$/, '');
-  return u.pathname === prefixo || u.pathname.startsWith(`${prefixo}/`) || (u.pathname === `${prefixo}` && u.search !== '');
-}
+export { dentroDaBase } from '../comum/metadados.ts';
+import { dentroDaBase } from '../comum/metadados.ts';
 
 /** Segue todas as páginas, conferindo cada link contra o fhir_base_url (seção 5.1). */
 export async function todasAsPaginas(ctx: Contexto, token: string, caminho: string, limite = 200): Promise<{ recursos: Array<Json & { resourceType: string; id: string }>; paginas: number; bundles: Json[] }> {

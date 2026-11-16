@@ -1,6 +1,7 @@
 // AUT: servidor de autorização (seção 9.3).
 
 import { randomUUID } from 'node:crypto';
+import { divergenciasDosMetadados as divergencias } from '../../comum/metadados.ts';
 import type { ClienteDeTeste, Contexto } from '../contexto.ts';
 import { cabecalhoUnico, type Resposta } from '../http.ts';
 import { esperar, falhar, naoVerificavel, type Relator } from '../resultado.ts';
@@ -23,28 +24,7 @@ async function parValido(ctx: Contexto, c: ClienteDeTeste) {
 
 /** Confere cada valor obrigatório da tabela da seção 5.2. Devolve a lista de divergências. */
 export function divergenciasDosMetadados(ctx: Contexto, m: Record<string, unknown>): string[] {
-  const erros: string[] = [];
-  const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-  const https = (v: unknown) => typeof v === 'string' && v.startsWith('https://');
-  if (m.issuer !== ctx.issuer) erros.push(`issuer ${String(m.issuer)} diferente do registro (${ctx.issuer})`);
-  for (const k of ['authorization_endpoint', 'token_endpoint', 'pushed_authorization_request_endpoint', 'jwks_uri']) {
-    if (!https(m[k])) erros.push(`${k} ausente ou sem https`);
-  }
-  for (const k of ['require_pushed_authorization_requests', 'authorization_response_iss_parameter_supported', 'tls_client_certificate_bound_access_tokens']) {
-    if (m[k] !== true) erros.push(`${k} precisa ser true (veio ${JSON.stringify(m[k])})`);
-  }
-  if (!igual(m.response_types_supported, ['code'])) erros.push('response_types_supported precisa ser exatamente ["code"]');
-  const grants = m.grant_types_supported;
-  if (!Array.isArray(grants) || !['authorization_code', 'refresh_token', 'client_credentials'].every((g) => grants.includes(g)) || grants.includes('password') || grants.includes('implicit')) {
-    erros.push('grant_types_supported precisa conter authorization_code, refresh_token e client_credentials, sem password nem implicit');
-  }
-  if (!igual(m.token_endpoint_auth_methods_supported, ['private_key_jwt'])) erros.push('token_endpoint_auth_methods_supported precisa ser exatamente ["private_key_jwt"]');
-  if (!igual(m.token_endpoint_auth_signing_alg_values_supported, ['PS256'])) erros.push('token_endpoint_auth_signing_alg_values_supported precisa ser exatamente ["PS256"]');
-  if (!igual(m.code_challenge_methods_supported, ['S256'])) erros.push('code_challenge_methods_supported precisa ser exatamente ["S256"]');
-  const escopos = m.scopes_supported;
-  const doRegistro = ctx.provedor.provider!.scopes_supported;
-  if (!Array.isArray(escopos) || !doRegistro.every((s) => escopos.includes(s))) erros.push('scopes_supported não contém todos os escopos do provedor no registro');
-  return erros;
+  return divergencias(m, ctx.issuer, ctx.provedor.provider!.scopes_supported);
 }
 
 function metadados(ctx: Contexto): Record<string, unknown> {

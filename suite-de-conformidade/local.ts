@@ -3,6 +3,9 @@
 // imprime o relatório.
 //
 //   node suite-de-conformidade/local.ts [--violacao nome ...] [--somente IDS] [--relatorio arquivo.json]
+//
+// Para ver o registro do servidor durante a execução, suba-o à parte
+// (pnpm servidor) e use pnpm suite --config ambiente-local/gerado/suite.config.json.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -22,24 +25,29 @@ export async function garantirAmbiente(pasta = PASTA_DO_AMBIENTE): Promise<void>
   await gerarAmbiente({ ...opcoesDaLinhaDeComando([]), saida: pasta });
 }
 
-export async function executarContraServidorDeExemplo(o: {
-  violacoes?: string[];
-  somente?: string[];
-  aoTerminar?: (r: Resultado) => void;
-  registrarEmLog?: boolean;
-} = {}): Promise<Resultado[]> {
+/** Sobe o servidor de exemplo e o contexto da suíte, executa `fn` e encerra os dois. */
+export async function comServidorDeExemplo<T>(fn: (ctx: Contexto) => Promise<T>, violacoes: string[] = []): Promise<T> {
   await garantirAmbiente();
-  const servidor = await iniciarServidor(
-    lerConfiguracao(join(PASTA_DO_AMBIENTE, 'servidor.config.json'), { violacoes: o.violacoes ?? [], registrarEmLog: o.registrarEmLog ?? false }),
-  );
+  const servidor = await iniciarServidor(lerConfiguracao(join(PASTA_DO_AMBIENTE, 'servidor.config.json'), { violacoes, registrarEmLog: false }));
   let ctx: Contexto | undefined;
   try {
     ctx = await Contexto.criar(lerConfiguracaoDaSuite(join(PASTA_DO_AMBIENTE, 'suite.config.json')));
-    return await executarSuite(ctx, { ...(o.somente ? { somente: o.somente } : {}), ...(o.aoTerminar ? { aoTerminar: o.aoTerminar } : {}) });
+    return await fn(ctx);
   } finally {
     await ctx?.encerrar();
     await servidor.fechar();
   }
+}
+
+export async function executarContraServidorDeExemplo(o: {
+  violacoes?: string[];
+  somente?: string[];
+  aoTerminar?: (r: Resultado) => void;
+} = {}): Promise<Resultado[]> {
+  return comServidorDeExemplo(
+    (ctx) => executarSuite(ctx, { ...(o.somente ? { somente: o.somente } : {}), ...(o.aoTerminar ? { aoTerminar: o.aoTerminar } : {}) }),
+    o.violacoes ?? [],
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -48,7 +56,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       violacao: { type: 'string', multiple: true },
       somente: { type: 'string' },
       relatorio: { type: 'string', default: 'relatorios/conformidade-servidor-de-exemplo.json' },
-      log: { type: 'boolean', default: false },
     },
   });
   console.log('Suíte de conformidade do Open Labs Brasil 0.2.1 contra o servidor de exemplo local');
@@ -58,7 +65,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     ...(values.violacao ? { violacoes: values.violacao } : {}),
     ...(values.somente ? { somente: values.somente.split(',').map((s) => s.trim()) } : {}),
     aoTerminar: (r) => console.log(linhaDeProgresso(r)),
-    registrarEmLog: values.log ?? false,
   });
   console.log(resumoDaExecucao(resultados));
   console.log(`\nDuração: ${Math.round((Date.now() - inicio) / 1000)} s`);

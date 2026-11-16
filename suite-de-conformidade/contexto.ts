@@ -6,6 +6,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
 import { base64url, importJWK, SignJWT, type CryptoKey, type JWK, type KeyObject } from 'jose';
+import { urlDosMetadados } from '../comum/metadados.ts';
 import { verificarCandidato, type DocumentoDoRegistro, type Participante } from '../comum/registro.ts';
 import { caminhoDe, lerArquivo, type ConfiguracaoDaSuite, type PacienteDeTeste, type PapelDoCliente } from './configuracao.ts';
 import { Hospedagem } from './hospedagem.ts';
@@ -164,9 +165,7 @@ export class Contexto {
   }
 
   urlDosMetadados(): string {
-    const u = new URL(this.issuer);
-    const caminho = u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '');
-    return `${u.origin}/.well-known/oauth-authorization-server${caminho}`;
+    return urlDosMetadados(this.issuer);
   }
 
   async lerMetadados(): Promise<void> {
