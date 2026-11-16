@@ -295,6 +295,7 @@ export class Provedor {
   /** Limpeza periódica de estado vencido e transições de relógio. */
   varrer(): void {
     const agora = this.relogio.agoraMs();
+    this.dados.garantirAgendas(agora);
     for (const c of this.consentimentos.values()) this.atualizarEstado(c);
     for (const [k, exp] of this.jtis) if (exp + 120_000 < agora) this.jtis.delete(k);
     for (const [k, p] of this.pedidosPar) if (p.expiraEm + 3600_000 < agora) this.pedidosPar.delete(k);

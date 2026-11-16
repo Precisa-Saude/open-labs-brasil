@@ -290,7 +290,8 @@ export const testesDeRegistro: Teste[] = [
       const chave = await chaveDoRegistro(ctx);
       const autorizado = await ctx.autorizar(c);
       const aguardando = await ctx.novoConsentimento(c);
-      const expira = Date.parse(ctx.registroAceito.documento.expires_at);
+      await ctx.sincronizarRelogio();
+      const expira = Date.parse(ctx.registroDoProvedorExpiraEm ?? ctx.registroAceito.documento.expires_at);
       await ctx.avancarRelogio(Math.ceil((expira - ctx.agoraMs()) / 1000) + 3600);
       r.evidencia('relógio do provedor 1 hora depois de expires_at');
       // O consentimento à espera também venceu (60 minutos), então invalid_request é uma recusa aceitável aqui.

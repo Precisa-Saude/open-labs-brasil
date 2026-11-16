@@ -234,10 +234,28 @@ export class Contexto {
     return { status: r.status, json: texto ? (JSON.parse(texto) as Record<string, unknown>) : {} };
   }
 
+  /** Expiração do registro em vigor no provedor, quando a interface de controle informa. */
+  registroDoProvedorExpiraEm: string | undefined;
+
+  /**
+   * Relógio do provedor: pela interface de controle, quando há; senão pelo
+   * cabeçalho Date das respostas, como a seção 7.11 permite ao cliente.
+   */
   async sincronizarRelogio(): Promise<void> {
-    if (!this.temControle) return;
+    if (!this.temControle) {
+      const r = await this.http.requisitar(this.urlDosMetadados(), { credencial: null, semHistorico: true }).catch(() => undefined);
+      const data = r?.cabecalhos.date;
+      const ms = typeof data === 'string' ? Date.parse(data) : NaN;
+      if (!Number.isNaN(ms)) this.deslocamentoMs = ms - Date.now();
+      return;
+    }
     const r = await this.controle('GET', '/_controle/estado');
     if (typeof r.json.agora_ms === 'number') this.deslocamentoMs = r.json.agora_ms - Date.now();
+    if (typeof r.json.sequencia_do_registro === 'number' && r.json.sequencia_do_registro > this.registroAceito.documento.sequence) {
+      // O provedor já aceitou documentos de uma execução anterior: os candidatos partem da sequence dele.
+      this.registroAceito = { ...this.registroAceito, documento: { ...this.registroAceito.documento, sequence: r.json.sequencia_do_registro } };
+    }
+    if (typeof r.json.registro_expira_em === 'string') this.registroDoProvedorExpiraEm = r.json.registro_expira_em;
   }
 
   async avancarRelogio(segundos: number): Promise<void> {

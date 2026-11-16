@@ -228,7 +228,7 @@ export class DadosSinteticos {
     for (const exame of EXAMES) this.gravar(this.activityDefinition(exame), inicioDosDados);
     this.gerarPrecos(inicioDosDados);
     this.gerarUnidades(inicioDosDados);
-    this.gerarAgendas(referenciaMs, inicioDosDados);
+    this.garantirAgendas(referenciaMs);
     for (const p of PACIENTES) this.gravar(this.paciente(p), inicioDosDados, { pacienteId: p.id });
     this.gerarResultados(inicioDosDados);
     this.gerarAgendamentoDeOutroCanal(inicioDosDados);
@@ -402,9 +402,16 @@ export class DadosSinteticos {
     }
   }
 
-  /** Agendas e horários: dias úteis a partir do dia seguinte à referência, por 21 dias, de 15 em 15 minutos. */
-  private gerarAgendas(referenciaMs: number, em: number) {
-    const ref = new Date(referenciaMs - 3 * 3600_000); // data local
+  private readonly diasComHorarios = new Set<string>();
+  private contadorDeHorarios = 0;
+
+  /**
+   * Agendas e horários: dias úteis do dia seguinte até 21 dias à frente do
+   * relógio do provedor, de 15 em 15 minutos. Chamada de novo quando o relógio
+   * anda, para que a agenda acompanhe o tempo simulado.
+   */
+  garantirAgendas(agoraMs: number) {
+    const ref = new Date(agoraMs - 3 * 3600_000); // data local
     const dias: Array<{ ano: number; mes: number; dia: number }> = [];
     for (let d = 1; d <= 21; d++) {
       const data = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate() + d));
@@ -412,28 +419,30 @@ export class DadosSinteticos {
       if (dow === 0 || dow === 6) continue;
       dias.push({ ano: data.getUTCFullYear(), mes: data.getUTCMonth() + 1, dia: data.getUTCDate() });
     }
+    const chave = (d: { ano: number; mes: number; dia: number }) => `${d.ano}${String(d.mes).padStart(2, '0')}${String(d.dia).padStart(2, '0')}`;
+    const novos = dias.filter((d) => !this.diasComHorarios.has(chave(d)));
+    if (novos.length === 0) return;
     const primeiro = dias[0]!;
     const ultimo = dias[dias.length - 1]!;
     for (const u of UNIDADES) {
       const sufixo = u.id.replace('unidade-', '');
       const agendaId = `agenda-${sufixo}`;
-      this.gravar(
-        {
-          resourceType: 'Schedule',
-          id: agendaId,
-          meta: { profile: [perfil('br-lab-schedule')] },
-          active: true,
-          actor: [
-            { reference: `Location/${u.id}`, type: 'Location', display: u.nome },
-            { reference: `HealthcareService/coleta-${sufixo}`, type: 'HealthcareService' },
-          ],
-          planningHorizon: { start: local(primeiro.ano, primeiro.mes, primeiro.dia, 0, 0).texto, end: local(ultimo.ano, ultimo.mes, ultimo.dia, 23, 59).texto },
-        },
-        em,
-      );
+      const agenda: Recurso = {
+        resourceType: 'Schedule',
+        id: agendaId,
+        meta: { profile: [perfil('br-lab-schedule')] },
+        active: true,
+        actor: [
+          { reference: `Location/${u.id}`, type: 'Location', display: u.nome },
+          { reference: `HealthcareService/coleta-${sufixo}`, type: 'HealthcareService' },
+        ],
+        planningHorizon: { start: local(primeiro.ano, primeiro.mes, primeiro.dia, 0, 0).texto, end: local(ultimo.ano, ultimo.mes, ultimo.dia, 23, 59).texto },
+      };
+      const existente = this.tipo('Schedule').get(agendaId);
+      if (existente) this.atualizar(existente, agenda, agoraMs);
+      else this.gravar(agenda, agoraMs - 24 * 3600_000);
       const exames = this.examesPorUnidade.get(u.id) ?? [];
-      let contador = 0;
-      for (const dia of dias) {
+      for (const dia of novos) {
         for (let minutos = 6 * 60 + 30; minutos <= 10 * 60 + 45; minutos += 15) {
           const h = Math.floor(minutos / 60);
           const m = minutos % 60;
@@ -441,24 +450,24 @@ export class DadosSinteticos {
           const fim = local(dia.ano, dia.mes, dia.dia, Math.floor((minutos + 15) / 60), (minutos + 15) % 60);
           const hhmm = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
           const examesDoHorario = exames.filter((e) => !e.antesDas || hhmm < e.antesDas);
-          contador++;
-          const id = `${agendaId}-${dia.ano}${String(dia.mes).padStart(2, '0')}${String(dia.dia).padStart(2, '0')}-${hhmm.replace(':', '')}`;
+          this.contadorDeHorarios++;
           this.gravar(
             {
               resourceType: 'Slot',
-              id,
+              id: `${agendaId}-${chave(dia)}-${hhmm.replace(':', '')}`,
               meta: { profile: [perfil('br-lab-slot')] },
               schedule: { reference: `Schedule/${agendaId}` },
-              status: contador % 7 === 0 ? 'busy' : 'free',
+              status: this.contadorDeHorarios % 7 === 0 ? 'busy' : 'free',
               start: inicio.texto,
               end: fim.texto,
               serviceType: examesDoHorario.map((e) => ({ coding: codingsDoExame(e), text: e.titulo })),
             },
-            em,
+            agoraMs - 24 * 3600_000,
           );
         }
       }
     }
+    for (const d of novos) this.diasComHorarios.add(chave(d));
   }
 
   private paciente(p: Paciente): Recurso {

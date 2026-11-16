@@ -35,8 +35,10 @@ export interface ServidorEmExecucao {
   fechar: () => Promise<void>;
 }
 
-function hsts(res: ServerResponse) {
+function cabecalhosComuns(res: ServerResponse, provedor: Provedor) {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // Date pelo relógio do provedor: um cliente pode usá-lo para ajustar as asserções (seção 7.11).
+  res.setHeader('Date', provedor.relogio.agora().toUTCString());
 }
 
 export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { relogio?: Relogio } = {}): Promise<ServidorEmExecucao> {
@@ -70,7 +72,7 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
   };
 
   const publico = https.createServer(tls, comCaptura(async (req, res) => {
-    hsts(res);
+    cabecalhosComuns(res, provedor);
     const url = new URL(req.url ?? '/', provedor.issuer);
     const compartilhamentos = new URL(provedor.participante.provider!.consent_management_uri).pathname;
     if (req.method === 'OPTIONS') return enviarHtml(res, 405, paginaDeErro('Método não suportado.'), { Allow: 'GET, POST' });
@@ -85,7 +87,7 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
   }));
 
   const mtls = https.createServer({ ...tls, requestCert: true, rejectUnauthorized: false, ca: readFileSync(cfg.tls.caConfiavel) }, comCaptura(async (req, res) => {
-    hsts(res);
+    cabecalhosComuns(res, provedor);
     const url = new URL(req.url ?? '/', provedor.urlMtls);
     const api = new URL(provedor.apiBaseUrl).pathname.replace(/\/$/, '');
     const fhir = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
@@ -103,6 +105,7 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
     if (url.pathname === api || url.pathname.startsWith(`${api}/`)) return tratarConsentimentos(provedor, req, res, url);
     if (url.pathname === fhir || url.pathname.startsWith(`${fhir}/`)) {
       expirarPagamentos(provedor);
+      provedor.dados.garantirAgendas(provedor.relogio.agoraMs());
       return tratarFhir(provedor, req, res, url);
     }
     return enviarFhir(res, 404, operationOutcome(new ErroDeApi(404, 'RESOURCE_NOT_FOUND', 'not-found', 'Endpoint inexistente.')));
