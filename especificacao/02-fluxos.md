@@ -57,7 +57,7 @@ sequenceDiagram
 
 É o único fluxo em que o paciente se autentica. Agendamento, resultados e registros de consentimento exigem ter passado por ele. Catálogo, unidades e agenda não exigem.
 
-**Pré-condições:** o paciente escolheu o laboratório dentro do aplicativo. O receptor conhece o CPF desse paciente, informado por ele no aplicativo, e guarda esse CPF junto com a jornada. O receptor tem um token de provedor com o escopo `consent.manage`.
+**Pré-condições:** o paciente escolheu o laboratório dentro do aplicativo. O receptor conhece o CPF desse paciente, informado por ele no aplicativo, confere que é um CPF válido pela definição de [04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, e guarda esse CPF junto com a jornada. Com CPF inválido, a jornada não começa. O receptor tem um token de provedor com o escopo `consent.manage`, e o registro de participantes que ele aceitou não está expirado.
 
 O receptor **não** envia o CPF ao provedor em nenhum passo.
 
@@ -69,7 +69,7 @@ O receptor **não** envia o CPF ao provedor em nenhum passo.
 6. O provedor mostra a tela de consentimento: nome do receptor (do registro), escopos em linguagem comum, finalidade, data de expiração. O paciente aprova ou recusa.
 7. Aprovado, o provedor grava no consentimento quem é o paciente autenticado, passa o consentimento a `AUTHORISED` e redireciona o navegador para o `redirect_uri` do receptor com `code`, `state` e `iss` na consulta da URL. Nenhum dado do paciente vai no redirecionamento.
 8. O aplicativo entrega os três valores ao backend, que confere `state` e confere que `iss` é o `issuer` do provedor para o qual a jornada foi aberta.
-9. O backend troca o código por tokens no endpoint de token, com `code_verifier` e `private_key_jwt`. A resposta traz `access_token` e `refresh_token`, e nenhum dado do paciente.
+9. O backend troca o código por tokens no endpoint de token, com `code_verifier` e `private_key_jwt`. A resposta traz `access_token` e `refresh_token`, e nenhum dado do paciente. Se o registro local do receptor expirou depois do passo 1, ele não troca o código, e a jornada termina sem vínculo ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3).
 10. **Conferência do titular.** Antes de qualquer outra chamada, o backend lê `GET {api_base_url}/consents/{consent_id}` com o token de paciente. Só nessa leitura a resposta inclui `patient.cpf`, o CPF do paciente que se autenticou no provedor, e `patient.fhir_id`.
 11. O backend compara `patient.cpf` com o CPF do paciente que iniciou a jornada no aplicativo.
     - Iguais: o vínculo está concluído.
@@ -238,13 +238,13 @@ sequenceDiagram
 
 O paciente revoga na tela de consentimentos do aplicativo, ou o receptor encerra o vínculo por conta própria (por exemplo, exclusão da conta, ou CPF divergente no fluxo 2.2).
 
-1. O receptor descarta os tokens do consentimento e para de chamar a API FHIR com ele. Isso acontece antes da chamada ao provedor e não depende dela.
+1. O receptor descarta os tokens do consentimento, para de chamar a API FHIR com ele e grava a revogação em armazenamento durável. Isso acontece antes da chamada ao provedor e não depende dela.
 2. O receptor envia `DELETE {api_base_url}/consents/{consent_id}?reason=PATIENT_REQUEST` com um token de provedor cujo único escopo é `consent.manage`.
 3. O provedor passa o consentimento a `REVOKED` e invalida o refresh token e os tokens de acesso ligados a ele. Chamadas posteriores com eles recebem 401.
 
-Se a chamada falha, o receptor faz no máximo três tentativas automáticas, com recuo e respeitando `Retry-After`. Persistindo a falha, a revogação fica **pendente**: gravada de forma durável, repetida ao menos uma vez por hora no primeiro dia e ao menos uma vez por dia depois, e mostrada ao paciente junto com o endereço da página de consentimentos do provedor, onde ele pode revogar diretamente. As regras estão em [04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Revogação pendente".
+Se a chamada falha de um jeito que admite repetição, o receptor faz no máximo três tentativas automáticas, com recuo e respeitando `Retry-After`. Uma falha que não admite repetição, como `invalid_client`, encerra as tentativas na hora. Sem confirmação, a revogação já gravada fica **pendente**: repetida ao menos uma vez por hora no primeiro dia e ao menos uma vez por dia depois, e mostrada ao paciente junto com o endereço da página de consentimentos do provedor, onde ele pode revogar diretamente. As regras estão em [04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Revogação pendente".
 
-Um registro de participantes expirado não impede a revogação nos 7 dias seguintes ao vencimento ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3).
+Um registro de participantes expirado não impede a revogação nos 7 dias seguintes ao vencimento ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3). Um provedor que não está `active` no registro, ou sem versão efetiva com o receptor, não é chamado nem para revogar: a pendência espera, e a página do provedor continua à vista do paciente ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.4).
 
 ```mermaid
 sequenceDiagram
@@ -255,15 +255,16 @@ sequenceDiagram
     participant AS as Servidor de autorização (provedor)
     Note over P,R: O paciente age dentro do aplicativo do receptor, com o login do aplicativo. A senha do laboratório não é pedida nem usada.
     P->>R: Revogar o acesso ao laboratório
-    R->>R: Descarta os tokens do consentimento<br/>e para de chamar a API FHIR
+    R->>R: Descarta os tokens do consentimento,<br/>para de chamar a API FHIR<br/>e grava a revogação em armazenamento durável
     R->>RS: DELETE consents/ID?reason=PATIENT_REQUEST<br/>com token de provedor só com consent.manage
     alt Provedor responde
     RS->>RS: Consentimento passa a REVOKED
     RS->>AS: Invalida refresh token e tokens de acesso
     RS-->>R: 204
+    R->>R: Apaga o registro da revogação
     R-->>P: Acesso revogado
-    else Falha em três tentativas com recuo
-    R->>R: Grava a revogação como pendente<br/>e agenda novas tentativas
+    else Falha em até três tentativas com recuo, ou falha que não admite repetição
+    R->>R: A revogação gravada passa a pendente<br/>e entra no calendário de novas tentativas
     R-->>P: O aplicativo já parou de acessar. Revogação pendente no laboratório.<br/>Mostra o endereço da página de consentimentos do provedor
     end
 ```
