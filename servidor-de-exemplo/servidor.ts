@@ -16,6 +16,7 @@ import { tratarFhir } from './fhir.ts';
 import { enviarFhir, enviarHtml, enviarJson, ErroDeApi, operationOutcome } from './http.ts';
 import { paginaDeErro } from './paginas.ts';
 import { Provedor } from './provedor.ts';
+import { comTratamentoDeErros } from './recursos.ts';
 import { RegistroDoProvedor } from './registro-do-provedor.ts';
 
 /** As quatro suítes da seção 7.5 no TLS 1.2. No TLS 1.3 valem as suítes padrão. */
@@ -88,6 +89,14 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
     const url = new URL(req.url ?? '/', provedor.urlMtls);
     const api = new URL(provedor.apiBaseUrl).pathname.replace(/\/$/, '');
     const fhir = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
+    if (provedor.emManutencao) {
+      if (['/par', '/token', '/revoke'].includes(url.pathname)) {
+        return enviarJson(res, 503, { error: 'temporarily_unavailable', error_description: 'manutenção simulada' }, { 'Retry-After': '30', 'Cache-Control': 'no-store' });
+      }
+      return comTratamentoDeErros(provedor, req, res, async () => {
+        throw new ErroDeApi(503, 'PROVIDER_UNAVAILABLE', 'transient', 'Provedor em manutenção (simulada).', { cabecalhos: { 'Retry-After': '30' } });
+      });
+    }
     if (url.pathname === '/par') return tratarPar(provedor, req, res);
     if (url.pathname === '/token') return tratarToken(provedor, req, res);
     if (url.pathname === '/revoke') return tratarRevogacaoDeToken(provedor, req, res);

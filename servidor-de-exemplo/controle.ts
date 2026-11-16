@@ -76,6 +76,10 @@ export async function tratarControle(provedor: Provedor, req: IncomingMessage, r
       }
     }
 
+    case 'POST /_controle/indisponibilidade':
+      provedor.emManutencao = corpo.ativo === true;
+      return enviarJson(res, 200, { em_manutencao: provedor.emManutencao });
+
     case 'POST /_controle/revogar-pelo-paciente':
       return enviarJson(res, provedor.revogarPeloPaciente(texto('consent_id')) ? 200 : 404, {});
 

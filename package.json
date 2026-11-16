@@ -8,7 +8,17 @@
   "engines": {
     "node": ">=22.18"
   },
-  "scripts": {},
+  "scripts": {
+    "ambiente:gerar": "node ambiente-local/gerar.ts --se-faltar",
+    "servidor": "node servidor-de-exemplo/principal.ts --config ambiente-local/gerado/servidor.config.json",
+    "suite": "node suite-de-conformidade/principal.ts",
+    "conformidade:local": "node suite-de-conformidade/local.ts",
+    "jornada": "node suite-de-conformidade/receptor-minimo/jornada.ts",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "docs:links": "node ferramentas/conferir-links.ts",
+    "verificar": "pnpm typecheck && pnpm test && pnpm conformidade:local && pnpm docs:links"
+  },
   "dependencies": {
     "ajv": "^8.20.0",
     "jose": "^6.2.17"

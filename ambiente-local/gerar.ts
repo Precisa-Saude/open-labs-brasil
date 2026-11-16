@@ -302,6 +302,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
       exame_comum: FIXTURAS.exameComum,
       exame_restrito: FIXTURAS.exameRestrito,
       exame_indisponivel: { unidade: `Location/${FIXTURAS.exameIndisponivel.unidade}`, exame: FIXTURAS.exameIndisponivel.exame },
+      prazo_de_pagamento_minutos: 15,
     },
     catalogo: { item_para_retirar: 'mucoproteinas', sistema_proprio: SISTEMA_PRODUTOS },
     controle_de_teste: { url: `http://127.0.0.1:${o.portaControle}`, token: tokenDeControle },

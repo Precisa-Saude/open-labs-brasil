@@ -114,6 +114,8 @@ export class Provedor {
   readonly jtis = new Map<string, number>();
   readonly transacoes = new Map<string, TransacaoDeAutorizacao>();
   readonly sessoes = new Map<string, SessaoDoPaciente>();
+  /** Manutenção simulada pela interface de controle: APIs respondem 503 com Retry-After. */
+  emManutencao = false;
   readonly log: (mensagem: string) => void;
 
   constructor(cfg: ConfiguracaoDoServidor, relogio: Relogio, registro: RegistroDoProvedor, log: (m: string) => void) {
