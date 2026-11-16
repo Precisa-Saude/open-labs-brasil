@@ -65,7 +65,7 @@ Corpo JSON com `error` e, opcionalmente, `error_description` [RFC6749], seção 
 | `invalid_request` | 400 | Parâmetro ausente, repetido ou malformado. No PAR: `response_type` diferente de `code`, `redirect_uri` ausente ou fora do registro, `code_challenge` ausente ou método diferente de `S256`, `consent:{id}` ausente, desconhecido, de outro receptor ou fora de `AWAITING_AUTHORISATION` | Não. Corrigir a requisição |
 | `invalid_client` | 401 | Sem autenticação do cliente. Asserção inválida ou expirada, assinada com algoritmo diferente de PS256, com `aud` diferente do `issuer` ou em forma de lista, com `iat` mais de 60 segundos no futuro, ou com `jti` repetido. `client_id` desconhecido. Receptor `suspended` ou `withdrawn` no registro. Certificado TLS que não está no registro | Não, até corrigir chaves ou situação no registro |
 | `invalid_grant` | 400 | Código de autorização com mais de 60 segundos, já usado ou emitido para outro cliente. `code_verifier` que não confere. Refresh token inválido, emitido para outro cliente, ou ligado a consentimento que saiu de `AUTHORISED` | Não. Consultar o consentimento (seção 6.4) |
-| `unauthorized_client` | 400 | O provedor não atende este receptor para a concessão ou o escopo pedido, por exemplo falta de acordo para `catalog.read` | Não. Questão comercial fora do protocolo |
+| `unauthorized_client` | 400 | O provedor não atende este receptor para a concessão ou o escopo pedido, por exemplo falta de acordo para `catalog.read`. Também quando o registro do provedor está expirado e o pedido não é `client_credentials` com `consent.manage` como único escopo | Não. No primeiro caso, questão comercial fora do protocolo. No segundo, até o provedor aceitar um registro novo |
 | `unsupported_grant_type` | 400 | `grant_type` diferente dos três suportados, inclusive `password` | Não |
 | `invalid_scope` | 400 | Escopo desconhecido. Escopo de paciente em `client_credentials`. Escopo de provedor em requisição de autorização. Escopo fora do consentimento. Escopo fora de `scopes_allowed` do receptor | Não |
 | `server_error` | 500 | Falha interna | Sim, com recuo exponencial |
@@ -104,7 +104,8 @@ A coluna "Repetir?" diz se a mesma requisição, sem mudança, pode ter sucesso 
 | `CONSENT_EXPIRED` | 401 | `expired` | `error="invalid_token"` | O consentimento do token está `EXPIRED` | Não |
 | `SCOPE_INSUFFICIENT` | 403 | `forbidden` | `error="insufficient_scope"` | O token não tem o escopo que o recurso exige, ou é do tipo errado (provedor em recurso de paciente, ou o contrário) | Não |
 | `PATIENT_NOT_IN_CONSENT` | 403 | `forbidden` | | Parâmetro `patient` de busca diferente do paciente do consentimento | Não |
-| `RECEIVER_NOT_ALLOWED` | 403 | `forbidden` | | O provedor não atende este receptor, ou o receptor está `suspended` | Não, até mudar a situação |
+| `RECEIVER_NOT_ALLOWED` | 403 | `forbidden` | | O provedor não atende este receptor, o receptor está `suspended`, ou não há versão de protocolo efetiva entre os dois | Não, até mudar a situação |
+| `REGISTRY_EXPIRED` | 403 | `forbidden` | | `POST /consents` enquanto o registro de participantes do provedor está expirado. Nesse período o token de `consent.manage` só serve para consultar e revogar ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3) | Não, até o provedor aceitar um registro novo |
 | `CLIENT_CERTIFICATE_REQUIRED` | 401 | `security` | | Conexão sem certificado de cliente, ou com certificado fora do registro. Quando a recusa acontece no handshake TLS, não há resposta HTTP | Não |
 
 ### 6.3.2 Requisição
@@ -156,8 +157,8 @@ A coluna "Repetir?" diz se a mesma requisição, sem mudança, pode ter sucesso 
 
 ## 6.4 Regras para o receptor
 
-1. **Repetição segura.** `GET` e `DELETE` de consentimento PODEM ser repetidos. A criação de agendamento PODE ser repetida porque é condicional (`If-None-Exist`): a segunda tentativa recebe 200 e não cria outro. `PUT` de agendamento PODE ser repetido com o mesmo `If-Match`: se a primeira tentativa foi aplicada, a segunda recebe 412, e o receptor lê o recurso para conferir.
-2. **Recuo.** Em erros marcados "com recuo exponencial", o receptor espera ao menos 1 segundo antes da primeira repetição e dobra a espera a cada tentativa. Com `Retry-After`, espera ao menos o valor indicado.
+1. **Repetição segura.** `GET` e `DELETE` de consentimento PODEM ser repetidos. Na revogação, 404 `CONSENT_NOT_FOUND` e 422 `CONSENT_INVALID_STATE` contam como concluída: o consentimento já não vale no provedor. A criação de agendamento PODE ser repetida porque é condicional (`If-None-Exist`): a segunda tentativa recebe 200 e não cria outro. `PUT` de agendamento PODE ser repetido com o mesmo `If-Match`: se a primeira tentativa foi aplicada, a segunda recebe 412, e o receptor lê o recurso para conferir.
+2. **Recuo e limite.** Em erros marcados "com recuo exponencial", o receptor espera ao menos 1 segundo antes da primeira repetição e dobra a espera a cada tentativa. Com `Retry-After`, espera ao menos o valor indicado. Nenhuma operação é repetida automaticamente mais de três vezes seguidas, contando a primeira tentativa. Depois disso a operação falha para quem a pediu, com uma exceção: a revogação de consentimento, que passa a pendente e continua sendo tentada em calendário próprio ([04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Revogação pendente").
 3. **401 em recurso.** O receptor tenta renovar o token uma vez. Se a renovação devolver `invalid_grant`, ele consulta `GET /consents/{consent_id}` com um token de provedor e age conforme o estado: `REVOKED` ou `EXPIRED` encerram o vínculo. `AUTHORISED` com `invalid_grant` indica que o refresh token foi revogado isoladamente, e só um novo consentimento devolve o acesso.
 4. **403 `RECEIVER_NOT_ALLOWED` e `invalid_client`.** O receptor para de chamar aquele provedor e confere a própria situação no registro. Insistir não muda o resultado.
 5. **Erros desconhecidos.** Um código que o receptor não conhece é tratado pelo status HTTP: 4xx não se repete, 5xx se repete com recuo.
@@ -183,10 +184,12 @@ A coluna "Repetir?" diz se a mesma requisição, sem mudança, pode ter sucesso 
 O que o receptor faz, nesta ordem:
 
 1. Não chama a API FHIR com o token recebido.
-2. Envia o `DELETE` com um token de provedor. Se falhar, repete com recuo até conseguir, e enquanto isso trata o consentimento como encerrado.
-3. Descarta o token de acesso, o refresh token e o CPF recebido.
+2. Descarta o token de acesso, o refresh token e o CPF recebido.
+3. Envia o `DELETE` com um token de provedor. Se falhar, aplica a regra da revogação pendente: três tentativas, depois pendência durável, repetida em calendário e visível ao paciente.
 4. Explica ao paciente, sem mostrar o CPF recebido, que a conta usada no laboratório pertence a outra pessoa, e oferece recomeçar.
 
 Não repetir: a mesma jornada não pode ter outro resultado. Uma nova tentativa é um novo consentimento, com novo login no laboratório.
+
+**Quando a conferência não pôde ser feita.** Se a leitura do consentimento falha, ou vem sem um `patient.cpf` válido, não houve divergência observada, e `PATIENT_MISMATCH` seria uma afirmação falsa no histórico do consentimento. O receptor segue os mesmos quatro passos com duas diferenças: o motivo do `DELETE` é `RECEIVER_TERMINATION`, e a mensagem ao paciente diz que a conexão não pôde ser concluída, sem mencionar outra pessoa. As condições estão em [04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Conferência impossível".
 
 O provedor não precisa agir além de processar o `DELETE`. Ele PODE usar a ocorrência de `PATIENT_MISMATCH` em seus controles de segurança, por exemplo para notar um receptor com taxa alta de divergência.

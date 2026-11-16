@@ -20,12 +20,12 @@ Campos do documento:
 
 | Campo | Tipo | Regra |
 | --- | --- | --- |
-| `schema_version` | texto | Versão do formato, `1.x` |
+| `schema_version` | texto | Versão do formato do arquivo, `0.x` nesta fase. Tem numeração própria e não é a versão do protocolo ([09-versionamento-e-conformidade.md](09-versionamento-e-conformidade.md), seção 9.1) |
 | `environment` | texto | `pilot` ou `production` |
 | `sequence` | inteiro | Cresce em 1 a cada publicação. Nunca se repete nem diminui |
 | `issued_at` | data e hora | Instante da assinatura |
-| `expires_at` | data e hora | No máximo 30 dias depois de `issued_at` |
-| `registry_keys.keys` | lista de JWK | Chaves públicas aceitas para verificar o documento de `sequence` seguinte. De 1 a 4 chaves RSA com `alg` igual a `PS256` |
+| `expires_at` | data e hora | Depois de `issued_at` e no máximo 30 dias depois dele |
+| `registry_keys.keys` | lista de JWK | Chaves públicas aceitas para verificar o documento de `sequence` seguinte. De 1 a 4 chaves RSA com `alg` igual a `PS256`. O `kid` de cada chave é o thumbprint SHA-256 dela [RFC7638] |
 | `participants` | lista | Os participantes |
 
 Campos comuns de cada participante:
@@ -40,7 +40,7 @@ Campos comuns de cada participante:
 | `cnpj` | texto | 14 caracteres, sem pontuação |
 | `contacts.technical_email` | texto | Contato de integração |
 | `contacts.security_email` | texto | Contato para incidentes |
-| `protocol_versions` | lista de texto | Versões `MAJOR.MINOR` do protocolo que o participante implementa |
+| `protocol_versions` | lista de texto | Versões `MAJOR.MINOR` do protocolo que o participante implementa. Enquanto o MAJOR for 0, exatamente uma. O significado e a regra de negociação estão em [09-versionamento-e-conformidade.md](09-versionamento-e-conformidade.md), seção 9.1 |
 | `updated_at` | data e hora | Última alteração da entrada |
 
 Bloco `provider`, presente quando `role` é `provider`:
@@ -49,7 +49,7 @@ Bloco `provider`, presente quando `role` é `provider`:
 | --- | --- |
 | `issuer` | Identificador do servidor de autorização. O documento de metadados fica em `/.well-known/oauth-authorization-server`, conforme a seção 5.2 |
 | `fhir_base_url` | Base da API FHIR R4 |
-| `api_base_url` | Base dos endpoints de consentimento, já com a versão maior no caminho |
+| `api_base_url` | Base dos endpoints de consentimento. Termina em `/v{MAJOR}` da versão do protocolo: `/v0` nesta fase |
 | `scopes_supported` | Escopos que o provedor implementa |
 | `consent_management_uri` | Página em que o paciente vê e revoga consentimentos |
 | `logo_uri` | Opcional |
@@ -84,7 +84,7 @@ Exemplo resumido de uma entrada de receptor. O arquivo completo está em [regist
     "technical_email": "integracao@app-paciente.example",
     "security_email": "seguranca@app-paciente.example"
   },
-  "protocol_versions": ["1.0"],
+  "protocol_versions": ["0.2"],
   "updated_at": "2026-11-12T16:45:00Z",
   "receiver": {
     "client_id": "c2b8f6a4-71de-4c0b-8f3a-9e5d2a7b6c31",
@@ -109,30 +109,64 @@ Exemplo resumido de uma entrada de receptor. O arquivo completo está em [regist
 
 Os CNPJs do exemplo usam raízes escolhidas para parecer fictícias (`99999990` e `99999991`) e têm dígitos verificadores calculados. Não foi conferido se correspondem a alguma inscrição real.
 
-## 8.3 Assinatura
+## 8.3 Assinatura e verificação
 
 O registro é assinado com JWS de conteúdo destacado, como descrito no [RFC7515], apêndice F.
 
+**Como o mantenedor assina**
+
 1. O conteúdo assinado são os bytes exatos de `participantes.json`, como publicados. Não há canonicalização: quem verifica usa os bytes que baixou.
-2. O cabeçalho protegido é `{"alg":"PS256","kid":"<kid>","typ":"JOSE"}`.
+2. O cabeçalho protegido é `{"alg":"PS256","kid":"<kid>","typ":"JOSE"}`, em que `<kid>` é o thumbprint SHA-256 da chave usada [RFC7638].
 3. O mantenedor calcula o JWS em serialização compacta sobre `BASE64URL(cabeçalho) || '.' || BASE64URL(bytes do arquivo)`.
 4. O arquivo `participantes.json.jws` contém o JWS compacto com o segundo campo vazio: `BASE64URL(cabeçalho)..BASE64URL(assinatura)`.
-5. O `kid` de cada chave do registro é o thumbprint SHA-256 da chave, calculado conforme o [RFC7638].
 
-Verificação por um participante que já aceitou o documento de `sequence` N e recebe um candidato:
+**Como um participante verifica**
 
-1. Baixa `participantes.json` e `participantes.json.jws` por HTTPS.
-2. Lê o `kid` do cabeçalho e procura a chave em `registry_keys` do documento N que já tem. Se não achar, recusa.
-3. Reconstrói o JWS inserindo `BASE64URL(bytes baixados)` no segundo campo e verifica a assinatura PS256. Se falhar, recusa.
-4. Valida o documento contra o schema. Se falhar, recusa.
-5. Confere que `sequence` é maior que N, que `issued_at` não está mais de 60 segundos no futuro e que `expires_at` não passou. Se falhar, recusa.
-6. Aceita o documento e passa a usar o `registry_keys` dele para o próximo.
+Esta é a lista completa. Um participante que já aceitou o documento de `sequence` N e recebe um candidato DEVE aplicar todos os passos, na ordem, e DEVE recusar o candidato no primeiro que falhar. Não há outra regra de aceitação fora desta lista.
 
-Quando `sequence` é igual a N, o participante confere se os bytes são os mesmos que já tem e segue com o documento atual. O primeiro documento é verificado com o conjunto de chaves inicial, entregue a cada participante na admissão por canal separado e conferido pelo thumbprint.
+| Passo | Conferência | Recusa quando |
+| --- | --- | --- |
+| V1 | Baixa `participantes.json` e `participantes.json.jws` por HTTPS, com o certificado do servidor validado | A conexão não é HTTPS válida, ou um dos arquivos falta |
+| V2 | O `.jws` tem três campos separados por ponto, com o segundo vazio | Formato diferente |
+| V3 | O cabeçalho protegido tem `alg` igual a `PS256` | Qualquer outro algoritmo, inclusive `none` |
+| V4 | O `kid` do cabeçalho está em `registry_keys` do documento N que o participante já tem | Chave desconhecida. Chaves do próprio candidato não servem para verificá-lo |
+| V5 | O `kid` dessa chave é igual ao thumbprint SHA-256 dela, recalculado pelo participante [RFC7638], e a chave é RSA de 2048 bits ou mais | `kid` que não confere, ou chave menor |
+| V6 | A assinatura PS256 verifica sobre `BASE64URL(cabeçalho) || '.' || BASE64URL(bytes baixados)` | Assinatura inválida |
+| V7 | Os bytes são JSON válido contra o schema | Documento inválido |
+| V8 | `environment` é o ambiente em que o participante opera | Registro de outro ambiente |
+| V9 | `sequence` é maior que N | `sequence` menor. Igual a N: ver abaixo |
+| V10 | `issued_at` não está mais de 60 segundos no futuro | Emissão no futuro |
+| V11 | `expires_at` é posterior a `issued_at` e no máximo 30 dias depois dele | Validade invertida ou maior que 30 dias |
+| V12 | `expires_at` não passou | Documento já expirado |
+| V13 | Em cada chave de `registry_keys` do candidato, o `kid` é igual ao thumbprint recalculado | `kid` que não confere |
+| V14 | Nenhum `participant_id` se repete, e todo `client_id` de receptor é igual ao `participant_id` da mesma entrada | Repetição ou divergência |
+
+Passados os catorze passos, o participante aceita o documento e passa a usar o `registry_keys` dele para verificar o próximo.
+
+Quando `sequence` é igual a N, o participante confere se os bytes são os mesmos que já tem. Se forem, segue com o documento atual. Se não forem, recusa e avisa o mantenedor: dois documentos diferentes com a mesma sequência indicam erro de publicação ou adulteração.
+
+O primeiro documento é verificado com o conjunto de chaves inicial, entregue a cada participante na admissão por canal separado e conferido pelo thumbprint. Os passos são os mesmos, com o conjunto inicial no lugar de `registry_keys` do documento N em V4.
 
 Um participante que recusa um candidato continua usando o documento atual até ele expirar e DEVE avisar o mantenedor.
 
-**Documento expirado.** Passado `expires_at` sem documento novo aceito, o participante DEVE deixar de aceitar novas autorizações e novas concessões `client_credentials` e DEVE avisar o mantenedor. Tokens de acesso já emitidos seguem até expirar. A renovação por refresh token de consentimentos já `AUTHORISED` PODE continuar por até 7 dias, para que uma falha de publicação do registro não interrompa a entrega de resultados a pacientes.
+**Documento expirado.** Passado `expires_at` do documento atual sem documento novo aceito, o participante DEVE avisar o mantenedor e passa a operar em modo restrito:
+
+| Operação | Nos 7 dias seguintes a `expires_at` | Depois disso |
+| --- | --- | --- |
+| Novas autorizações (PAR) e criação de consentimento | Recusadas | Recusadas |
+| Concessão `client_credentials` com `catalog.read`, `locations.read` ou `schedule.read` | Recusada | Recusada |
+| Concessão `client_credentials` com `consent.manage` como único escopo | **Aceita**, para receptor que estava `active` no último documento aceito. O token só serve para `GET` e `DELETE` de consentimento | Recusada |
+| Renovação por refresh token de consentimento já `AUTHORISED` | PODE continuar | Recusada |
+| Tokens de acesso já emitidos | Valem até expirar | Valem até expirar |
+
+A terceira linha existe para que a revogação pedida por um paciente não fique bloqueada por um atraso administrativo na publicação do registro. Revogar só reduz acesso, então o risco de aceitar o pedido de um receptor cuja situação não pôde ser reconferida é pequeno, e é menor que o de manter um consentimento que o paciente quis encerrar. Sem essa linha, o texto permitiria que dados continuassem fluindo por refresh token durante 7 dias e, no mesmo período, impediria o paciente de interromper o fluxo pelo aplicativo.
+
+Regras do modo restrito:
+
+- O provedor DEVE aceitar a concessão da terceira linha e DEVE recusar `POST /consents` feito com esse token, com 403 e `REGISTRY_EXPIRED`.
+- O provedor recusa as demais concessões com `unauthorized_client`.
+- O receptor cujo registro local expirou NÃO DEVE iniciar jornadas nem pedir tokens de catálogo, unidades ou agenda. Ele DEVE continuar tentando as revogações pendentes, com tokens de escopo único `consent.manage`.
+- Passados os 7 dias, o receptor mantém a revogação pendente e a mostra ao paciente, junto com o endereço da página de consentimentos do provedor, que é o caminho garantido ([04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Revogação pendente").
 
 ## 8.4 Atualização e cache
 

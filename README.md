@@ -6,11 +6,11 @@ A regra que organiza todo o desenho: **a senha do paciente no laboratório nunca
 
 ## Situação
 
-**Rascunho, em fase de piloto.** Versão 0.2.0 da especificação, de 2026-11-16.
+**Rascunho, em fase de piloto.** Versão 0.2.1 da especificação, de 2026-11-16. O histórico está em [CHANGELOG.md](CHANGELOG.md).
 
 - Nada foi implementado nem testado contra um laboratório real.
 - Enquanto a versão começar com 0, qualquer mudança pode quebrar a anterior.
-- Os perfis FHIR referenciados estão sendo escritos em paralelo, em outro repositório, e não são finais.
+- Os perfis FHIR referenciados ficam em outro repositório, o do guia de implementação, e ainda podem mudar.
 - Este repositório é privado durante o piloto. A abertura é condição para a versão 1.0.0.
 
 ## Em uma página
@@ -31,6 +31,7 @@ A regra que organiza todo o desenho: **a senha do paciente no laboratório nunca
 ```
 README.md               este arquivo
 GOVERNANCE.md           quem decide mudanças hoje e como isso se transfere
+CHANGELOG.md            o que mudou em cada versão da especificação
 LICENSE                 Apache License 2.0 (código)
 LICENSE-spec            Creative Commons Atribuição 4.0 Internacional (texto)
 especificacao/          a especificação

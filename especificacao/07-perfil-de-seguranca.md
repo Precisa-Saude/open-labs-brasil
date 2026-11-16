@@ -61,6 +61,9 @@ Cada linha das tabelas aponta a fonte. Onde a coluna "Origem" diz "escolha deste
 | Mecanismo de vínculo | mTLS, conforme o [RFC8705] | [FAPI2-SP] 5.3.2.1 admite mTLS ou DPoP. Escolha: seção 7.8 |
 | Validade do token de acesso | `expires_in` entre 300 e 900 segundos | Escolha deste protocolo, igual à do Open Finance Brasil [OFB-FAPI] 5.1. O FAPI 2.0 não fixa número e recomenda tokens curtos com refresh token para concessões longas ([FAPI2-SP] 6.1) |
 | Formato do token de acesso | Livre. O receptor o trata como texto opaco | Escolha deste protocolo |
+| Uso do token de acesso pelo receptor | Nunca depois de decorrido `expires_in`. DEVERIA parar com ao menos 30 segundos de margem | Escolha deste protocolo |
+| Tokens de provedor | Um por escopo, como recomendação. `consent.manage` sempre sozinho, como obrigação | [FAPI2-SP] 5.3.3.1 recomenda pedir o menor privilégio necessário. A obrigação é escolha deste protocolo ([05-api.md](05-api.md), seção 5.3.4) |
+| Revogação de token (RFC 7009) | Endpoint opcional no provedor. Chamada opcional no receptor. Nunca substitui a revogação do consentimento | Escolha deste protocolo |
 | Refresh token | Emitido na concessão `authorization_code`. Não emitido em `client_credentials` | [RFC6749] 4.4.3 |
 | Rotação de refresh token | O servidor NÃO DEVE usar, salvo em circunstâncias extraordinárias e dando ao cliente prazo para repetir com o token antigo. O cliente DEVE aceitar um refresh token novo quando vier | [FAPI2-SP] 5.3.2.1 e nota 1; 5.3.3.1 |
 | Validade do refresh token | Até o fim do consentimento | Escolha deste protocolo, igual à regra do Open Finance Brasil [OFB-FAPI] 8.1 |

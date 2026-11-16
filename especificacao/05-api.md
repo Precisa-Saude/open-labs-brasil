@@ -33,7 +33,11 @@ A origem do cabeçalho `x-fapi-interaction-id` está em [07-perfil-de-seguranca.
 
 **Datas.** Nos endpoints de consentimento, `date-time` em UTC com sufixo `Z` e sem fração de segundo (`2027-05-15T03:00:00Z`). Na API FHIR, os tipos do FHIR.
 
-**Paginação na API FHIR.** Buscas devolvem `Bundle` do tipo `searchset`. O receptor PODE enviar `_count` (padrão 20, máximo 100). Quando há mais resultados, o Bundle traz `link` com `relation` igual a `next`, e o receptor segue essa URL sem alterá-la.
+**Paginação na API FHIR.** Buscas devolvem `Bundle` do tipo `searchset`. O receptor PODE enviar `_count` (padrão 20, máximo 100). Quando há mais resultados, o Bundle traz `link` com `relation` igual a `next`, e o receptor segue essa URL sem alterá-la. O FHIR trata esses links como opacos para o cliente [FHIR-HTTP], e por isso o protocolo limita para onde eles podem apontar:
+
+- O provedor DEVE emitir todo `link` de paginação dentro do seu `fhir_base_url` do registro: mesmo esquema, mesmo host, mesma porta, e caminho que começa pelo caminho da base, em fronteira de segmento.
+- Antes de seguir um `link`, o receptor DEVE conferir essas quatro condições contra o `fhir_base_url` do registro. Se alguma falha, ele NÃO DEVE fazer a requisição, nem com token nem sem ele, e trata a busca como erro do provedor. Assim um token de acesso e o certificado do cliente nunca são apresentados a outro endereço.
+- A comparação é feita depois de interpretar a URL, sem seguir redirecionamentos. O receptor NÃO DEVE seguir redirecionamento HTTP em chamadas à API FHIR ou aos endpoints de consentimento.
 
 **Identificador do paciente.** O receptor obtém o id lógico do recurso Patient em `patient.fhir_id`, na leitura do consentimento com token de paciente (seção 5.4.2), e o usa no parâmetro `patient` das buscas e nas referências `Patient/{id}`.
 
@@ -48,7 +52,7 @@ Host: auth.laboratorio.example
 
 Quando o `issuer` tem caminho (por exemplo `https://laboratorio.example/auth`), o trecho `/.well-known/oauth-authorization-server` entra entre o host e o caminho. O `issuer` do documento DEVE ser idêntico ao `issuer` do registro, e o receptor DEVE recusar o provedor se não for.
 
-O documento DEVE conter ao menos:
+Exemplo de documento:
 
 ```json
 {
@@ -68,6 +72,27 @@ O documento DEVE conter ao menos:
   "tls_client_certificate_bound_access_tokens": true
 }
 ```
+
+**Valores obrigatórios.** O documento DEVE trazer cada campo abaixo com o valor indicado. O receptor DEVE conferir todos e DEVE recusar o provedor se algum faltar ou tiver valor diferente. A recusa é necessária porque vários desses campos têm, por omissão, um valor incompatível com o perfil.
+
+| Campo | Valor exigido | Origem | Valor por omissão, se o campo faltar |
+| --- | --- | --- | --- |
+| `issuer` | Idêntico ao `issuer` do registro | [RFC8414] 2 e 3; [FAPI2-SP] 5.3.3.1 | (obrigatório no RFC) |
+| `authorization_endpoint` | URL `https` | [RFC8414] 2 | |
+| `token_endpoint` | URL `https` | [RFC8414] 2 | |
+| `pushed_authorization_request_endpoint` | URL `https` | [RFC9126] 5; [FAPI2-SP] 5.3.2.2 | |
+| `jwks_uri` | URL `https` | [RFC8414] 2; [FAPI2-SP] 5.4.2 | |
+| `require_pushed_authorization_requests` | `true` | [RFC9126] 5; [FAPI2-SP] 5.3.2.2 (recusar requisição sem PAR) | `false` |
+| `authorization_response_iss_parameter_supported` | `true` | [RFC9207] 2.3 e 3; [FAPI2-SP] 5.3.2.2 | `false` |
+| `tls_client_certificate_bound_access_tokens` | `true` | [RFC8705] 3.3; [FAPI2-SP] 5.3.2.1 | `false` |
+| `response_types_supported` | Exatamente `["code"]` | [RFC8414] 2; [FAPI2-SP] 5.3.2.2 | (obrigatório no RFC) |
+| `grant_types_supported` | Contém `authorization_code`, `refresh_token` e `client_credentials`. Não contém `password` nem `implicit` | [RFC8414] 2; [FAPI2-SP] 5.3.2.1 | `["authorization_code", "implicit"]` |
+| `token_endpoint_auth_methods_supported` | Exatamente `["private_key_jwt"]` | [RFC8414] 2; [FAPI2-SP] 5.3.2.1 | `client_secret_basic` |
+| `token_endpoint_auth_signing_alg_values_supported` | Exatamente `["PS256"]` | [RFC8414] 2, que o exige quando `private_key_jwt` é anunciado; [FAPI2-SP] 5.4.1 | Nenhum algoritmo |
+| `code_challenge_methods_supported` | Exatamente `["S256"]` | [RFC8414] 2; [FAPI2-SP] 5.3.2.2 | Sem suporte a PKCE |
+| `scopes_supported` | Contém todos os escopos de `scopes_supported` do provedor no registro | [RFC8414] 2 (recomendado lá, obrigatório aqui) | |
+
+Campos além desses são ignorados pelo receptor.
 
 O provedor PODE anunciar `mtls_endpoint_aliases` e `revocation_endpoint`. Quando `mtls_endpoint_aliases` existir, o receptor DEVE usar os endereços dele para os endpoints que exigem mTLS [RFC8705], seção 5. Os caminhos do exemplo (`/authorize`, `/token`, `/par`) são ilustrativos: o receptor usa sempre os valores do documento.
 
@@ -237,6 +262,8 @@ A resposta tem o mesmo formato. Em operação normal o servidor não devolve `re
 **Regras comuns**
 
 - `expires_in` DEVE ficar entre 300 e 900.
+- **Um token por escopo.** O servidor DEVE aceitar um pedido `client_credentials` com um único escopo de provedor, qualquer que seja. O receptor DEVERIA pedir um token por escopo, para que cada chamada leve só o privilégio de que precisa, como o FAPI 2.0 recomenda ([FAPI2-SP], seção 5.3.3.1). O receptor PODE combinar `catalog.read`, `locations.read` e `schedule.read` em um token. O receptor DEVE pedir `consent.manage` sempre sozinho: é o único escopo aceito com o registro expirado ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3), e um token que só gerencia consentimentos não deve carregar acesso a mais nada.
+- **Tempo de uso do token.** O receptor NÃO DEVE usar um token de acesso depois de decorrido o `expires_in` informado, contado do recebimento da resposta pelo próprio relógio. O receptor DEVERIA parar de usá-lo antes, com margem de ao menos 30 segundos, e PODE adotar margem maior. O receptor NÃO DEVE guardar tokens de provedor em armazenamento durável: eles são baratos de obter de novo.
 - O token de acesso DEVE estar vinculado ao certificado apresentado na conexão ([07-perfil-de-seguranca.md](07-perfil-de-seguranca.md), seção 7.5).
 - O receptor trata o token como texto opaco.
 - Erros: 400 com `invalid_request`, `invalid_grant`, `invalid_scope`, `unauthorized_client`, `unsupported_grant_type`; 401 com `invalid_client`.
@@ -244,6 +271,8 @@ A resposta tem o mesmo formato. Em operação normal o servidor não devolve `re
 ### 5.3.5 Revogação de token: `POST {revocation_endpoint}` (opcional)
 
 O provedor PODE oferecer o endpoint do [RFC7009]. O caminho normal para encerrar o acesso é revogar o consentimento (seção 5.4.3), que invalida os tokens. O endpoint de revogação serve para o receptor descartar um token específico, por exemplo depois de suspeitar de vazamento, sem encerrar o consentimento.
+
+O receptor não é obrigado a chamar este endpoint em nenhum fluxo, e um receptor que nunca o chama é conforme. Em particular, a revogação de consentimento NÃO DEVE ser feita por aqui: ela é sempre o `DELETE` do consentimento, que é o que muda o estado e deixa registro do motivo. Depois de um `DELETE` bem-sucedido, chamar a revogação de token é desnecessário, porque o provedor já invalidou os tokens.
 
 | Parâmetro | Obrigatório | Valor |
 | --- | --- | --- |
@@ -258,7 +287,7 @@ Devolve o conjunto de chaves públicas do servidor de autorização em formato J
 
 ## 5.4 Endpoints de consentimento
 
-Base: `{api_base_url}`, por exemplo `https://api.laboratorio.example/acesso/v1`. Só alcançam consentimentos criados pelo mesmo `client_id`.
+Base: `{api_base_url}`, por exemplo `https://api.laboratorio.example/acesso/v0`. Só alcançam consentimentos criados pelo mesmo `client_id`.
 
 | Endpoint | Token aceito |
 | --- | --- |
@@ -426,6 +455,8 @@ O uso esperado é de sincronização. O receptor baixa o catálogo inteiro uma v
 
 O FHIR R4 não define parâmetro de busca para `ChargeItemDefinition.code` nem para contexto de uso com valor de referência, que é onde o perfil registra a unidade em que o preço vale [FHIR-CHARGEITEMDEF]. Por isso a versão 1 não oferece busca de preço por exame ou por unidade: o receptor filtra localmente depois de sincronizar. A busca por município usa `jurisdiction`.
 
+O perfil `br-lab-charge-item-definition` prevê três alcances para um preço, todos em elementos do próprio recurso: uma unidade ou região em `useContext` (contexto `venue`, com referência a um `Location`), uma marca em `useContext` (contexto `brand` do sistema de códigos `https://fhir-brasil.dev.br/CodeSystem/lab-price-context`, com referência à `Organization` da marca) e um ou mais municípios em `jurisdiction`. O preço por marca e região leva os dois contextos. O receptor que sincroniza o catálogo DEVE ler os três e NÃO DEVE supor que um preço vale para todas as unidades quando ele traz contexto.
+
 Um exame que deixa de ser oferecido passa a `status=retired` e continua legível, para que a sincronização incremental o enxergue. O mesmo vale para preços.
 
 ### 5.5.3 Unidades (`locations.read`, token de provedor)
@@ -510,7 +541,7 @@ O FHIR diz que recursos contidos não têm existência independente do recurso q
           { "system": "http://loinc.org", "code": "15074-8", "display": "Glucose [Moles/volume] in Blood" }
         ]
       },
-      "subject": { "reference": "Patient/pac-8842" }
+      "subject": { "reference": "Patient/pac-8842", "type": "Patient" }
     }
   ],
   "identifier": [
@@ -522,8 +553,8 @@ O FHIR diz que recursos contidos não têm existência independente do recurso q
   "slot": [{ "reference": "Slot/slot-20261123-1000" }],
   "basedOn": [{ "reference": "#exame-1" }],
   "participant": [
-    { "actor": { "reference": "Patient/pac-8842" }, "status": "accepted" },
-    { "actor": { "reference": "Location/unidade-centro" }, "status": "needs-action" }
+    { "actor": { "reference": "Patient/pac-8842", "type": "Patient" }, "status": "accepted" },
+    { "actor": { "reference": "Location/unidade-centro", "type": "Location" }, "status": "needs-action" }
   ]
 }
 ```
@@ -545,20 +576,55 @@ O exemplo é ilustrativo e os perfis prevalecem sobre ele. O código LOINC e o t
 
 Regras da criação:
 
-- O `Appointment` DEVE chegar com `status` igual a `proposed`, com ao menos um `ServiceRequest` contido, e com um `basedOn` para cada pedido contido. Todo recurso contido DEVE ser referenciado, e nenhum `basedOn` aponta para fora do recurso.
-- Cada `ServiceRequest` contido leva `status` igual a `active`, `intent` igual a `order`, o código do exame e `subject` igual ao paciente do agendamento. Recursos contidos não levam `meta.versionId` nem `meta.lastUpdated` [FHIR-REFS].
-- O `Appointment` DEVE trazer um `identifier` cujo `system` pertence ao receptor e cujo `value` é único. O mesmo par vai no cabeçalho `If-None-Exist`. É a criação condicional do FHIR [FHIR-HTTP]: se não há agendamento com aquele identificador, o provedor cria e responde 201. Se já há um, o provedor não cria outro e responde 200. Assim o receptor pode repetir a chamada depois de uma falha de rede. Sem o cabeçalho, 400 com `IF_NONE_EXIST_REQUIRED`.
+- O `Appointment` DEVE chegar com `status` igual a `proposed` e DEVE cumprir as três invariantes do perfil `br-lab-appointment`: há ao menos um `ServiceRequest` em `contained` (`br-lab-appointment-contained-request`), cada `basedOn` é uma referência local a um `ServiceRequest` contido (`br-lab-appointment-based-on-contained`), e o `subject` de cada pedido contido repete o paciente do agendamento (`br-lab-appointment-request-subject`). O protocolo acrescenta que todo pedido contido DEVE ter um `basedOn` que aponte para ele.
+- **Participantes.** O perfil distingue o paciente e a unidade por `participant.actor.type`, sem resolver a referência. Por isso `actor.type` é obrigatório: `Patient` no participante do paciente e `Location` no da unidade. Sem ele o recurso não valida.
+- **Paciente.** O receptor identifica o paciente pela referência `Patient/{fhir_id}`, com o `fhir_id` lido do consentimento. O `subject` de cada pedido contido DEVE trazer a mesma referência literal do participante, caractere a caractere: a invariante compara o texto da referência. O perfil admite também identificar o paciente só pelo CPF, e o provedor DEVE aceitar essa forma se o CPF for o do paciente do consentimento.
+- **Pedidos.** Cada `ServiceRequest` contido leva `status` igual a `active`, `intent` igual a `order` e `code` com ao menos um `coding`. O código LOINC é o esperado para um exame avulso e não é obrigatório: um item do catálogo sem LOINC, como um combo, leva o código próprio do laboratório. O receptor DEVE copiar para o pedido os `coding` do `ActivityDefinition` correspondente, sem acrescentar nem retirar, e PODE preencher `instantiatesCanonical` com a URL canônica desse item. Recursos contidos não levam `meta.versionId` nem `meta.lastUpdated` [FHIR-REFS].
+- O `Appointment` DEVE trazer exatamente um `identifier` do receptor, cujo `system` pertence ao receptor e cujo `value` é único. O mesmo par vai no cabeçalho `If-None-Exist`, no formato definido abaixo. É a criação condicional do FHIR [FHIR-HTTP]: se não há agendamento com aquele identificador, o provedor cria e responde 201. Se já há um, o provedor não cria outro e responde 200. Assim o receptor pode repetir a chamada depois de uma falha de rede. Sem o cabeçalho, 400 com `IF_NONE_EXIST_REQUIRED`.
 - Depois de um 200 na criação condicional, o receptor lê o agendamento existente com `GET /Appointment?identifier={system}|{value}`.
 - As referências ao paciente DEVEM apontar para o paciente do consentimento. Caso contrário, 422 com `PATIENT_NOT_IN_CONSENT`.
 - O receptor DEVE enviar `Prefer: return=representation`, e o provedor DEVE devolver o recurso gravado no corpo do 201, com `Location` e `ETag`.
 - O provedor define o estado resultante: `pending` quando falta pagamento ou confirmação, `booked` quando está confirmado.
-- Quando falta pagamento, o `Appointment` devolvido DEVE trazer o link de pagamento na extensão que o perfil `br-lab-appointment` define para isso.
+- Quando falta pagamento, o `Appointment` devolvido DEVE trazer o link de pagamento na extensão `payment-link` (ver "Link de pagamento").
 
 O FHIR classifica a criação condicional como de uso experimental e observa que nem todo servidor a implementa [FHIR-HTTP]. Aqui ela é obrigatória apenas para `Appointment` e apenas com o parâmetro `identifier`.
 
+**Formato de `If-None-Exist` e do identificador.** O FHIR diz que o cabeçalho contém os parâmetros de busca, isto é, o que viria na URL depois do `?`, e dá como exemplo `If-None-Exist: identifier=http://my-lab-system|123` [FHIR-HTTP]. Na busca por token, a barra vertical separa sistema e valor, os caracteres `$`, `,` e `|` dentro de um valor precisam ser precedidos de `\`, e a codificação por `%` da URL continua valendo por cima disso [FHIR-SEARCH]. Para que nenhuma dessas regras de escape chegue a ser necessária, o protocolo restringe os caracteres:
+
+| Parte | Regra |
+| --- | --- |
+| `identifier.system` | URL `https` em domínio do receptor, só com letras, dígitos e `-`, `.`, `_`, `~`, `:`, `/`. Sem consulta, sem fragmento, sem `%`. No máximo 200 caracteres. Fixo por receptor |
+| `identifier.value` | De 1 a 64 caracteres do conjunto `A-Z`, `a-z`, `0-9`, `-`, `.`, `_`, `~`. São os caracteres não reservados do [RFC3986], seção 2.3, que nunca precisam de codificação. O receptor DEVERIA usar um UUID |
+| Cabeçalho | Exatamente `identifier=`, o `system`, uma barra vertical e o `value`. Um único parâmetro, sem espaços, sem `&` |
+
+- O receptor DEVE enviar o cabeçalho na forma literal, com a barra vertical sem codificação, como no exemplo do FHIR.
+- O provedor DEVE aceitar a forma literal e DEVE aceitar também a forma em que a barra vertical vem como `%7C` e os dois pontos e as barras do `system` vêm codificados por `%`, tratando as duas como iguais.
+- A comparação de `system` e de `value` é exata, sensível a maiúsculas e minúsculas.
+- Um `Appointment` cujo identificador do receptor foge dessas regras é recusado com 422 `INVALID_RESOURCE`. Um cabeçalho com outro parâmetro, com mais de um parâmetro ou que não corresponde ao `identifier` do corpo é recusado com 400 `IF_NONE_EXIST_REQUIRED`.
+
 **Link de pagamento.**
 
-- É uma URL `https` em domínio do provedor, específica daquele agendamento.
+- O link trafega em um único lugar: uma extensão no nível raiz do `Appointment`, com `url` igual a `https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link` e o endereço em `valueUrl`. É a extensão `PaymentLink` do guia de implementação, de contexto `Appointment`, que o perfil `br-lab-appointment` admite no máximo uma vez. O protocolo a referencia pela URL canônica e não a redefine.
+
+```json
+{
+  "resourceType": "Appointment",
+  "id": "ag-55120",
+  "status": "pending",
+  "extension": [
+    {
+      "url": "https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link",
+      "valueUrl": "https://www.laboratorio.example/pagamento/9f2c1b7e"
+    }
+  ]
+}
+```
+
+- O exemplo mostra só os elementos que importam aqui. O recurso real traz os demais.
+- O provedor NÃO DEVE pôr o link em outro elemento (`comment`, `patientInstruction`, `description`, outra extensão), e o receptor NÃO DEVE procurar link de pagamento fora dessa extensão.
+- A extensão aparece nas respostas de `POST`, `GET` e `PUT` enquanto houver pagamento a fazer. O provedor DEVERIA retirá-la quando o agendamento passa a `booked` ou `cancelled`.
+- O receptor NÃO DEVE enviar a extensão na criação. Em `PUT`, ele devolve o recurso como leu, com a extensão se ela estava lá, e o provedor ignora o valor recebido: o link é sempre definido pelo provedor.
+- É uma URL `https` em domínio do provedor, específica daquele agendamento. O receptor NÃO DEVE abrir um link com outro esquema.
 - O receptor DEVE abri-la no navegador do sistema, sem acrescentar parâmetros, e NÃO DEVE carregá-la em WebView nem buscá-la pelo backend.
 - O protocolo não transporta valor cobrado, meio de pagamento nem situação do pagamento. O receptor acompanha o resultado pelo `status` do `Appointment`.
 - O provedor define por quanto tempo segura o horário à espera do pagamento. Passado esse tempo, o `Appointment` vai a `cancelled`.
