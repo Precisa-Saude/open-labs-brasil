@@ -152,6 +152,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | CNS-023 | Oferece página de gestão de consentimentos em `consent_management_uri`, com revogação | Inspeção |
 | CNS-024 | `GET /consents/{id}` com token de provedor responde para consentimento em estado final | Consultar depois de revogar |
 | CNS-025 | Paciente cujo CPF no cadastro não é válido pela regra da seção 4.4 (dígitos verificadores errados, ou onze algarismos iguais) é tratado como paciente sem CPF: `access_denied` e `REJECTED` com `PATIENT_WITHOUT_CPF` | Autenticar com paciente de teste cujo CPF no cadastro é `00000000000` |
+| CNS-026 | `DELETE` repetido ou concorrente do mesmo consentimento aplica a transição uma única vez, mantém o `status_reason` da primeira chamada e responde a cada uma com 204 ou 422 `CONSENT_INVALID_STATE`, nunca 409 nem 5xx | Enviar dois `DELETE` simultâneos com motivos diferentes e consultar |
 
 ### API: regras comuns (provedor)
 
@@ -235,6 +236,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | ERR-004 | Nenhuma resposta de erro contém dado pessoal, CPF, token ou rastro de pilha | Inspecionar todos os erros provocados |
 | ERR-005 | 429 e 503 trazem `Retry-After` | Exceder o limite no ambiente de teste |
 | ERR-006 | Respostas de erro do endpoint de autorização trazem `iss` | Recusar o consentimento e inspecionar o redirecionamento |
+| ERR-007 | Nas respostas ao `DELETE` de consentimento e ao pedido de token `client_credentials` com `consent.manage`, `Retry-After` não passa de 86400 segundos | Provocar 429 e 503 nesses dois endpoints no ambiente de teste |
 
 ### Receptor
 
@@ -280,7 +282,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | RCP-038 | Grava a revogação em armazenamento durável no momento em que ela é decidida, antes da primeira tentativa, e um reinício durante as tentativas automáticas não a perde | Provedor de teste segura a resposta do primeiro `DELETE`. Reiniciar o backend do receptor. A revogação aparece como pendente e volta a ser tentada |
 | RCP-039 | Só trata um 404 da revogação como conclusão quando o `OperationOutcome` traz o código `CONSENT_NOT_FOUND`. Um 404 sem esse código mantém a revogação pendente | Provedor de teste devolve 404 sem corpo, e 404 com outro código |
 | RCP-040 | Diante de falha que não admite repetição na revogação (seção 4.4), encerra as tentativas automáticas na hora e mantém a revogação pendente | Provedor de teste devolve `invalid_client` no endpoint de token: uma tentativa só, pendência gravada |
-| RCP-041 | Não faz tentativa de revogação, automática ou do calendário, antes do instante indicado por `Retry-After`, e encerra as tentativas automáticas quando a espera passa do próprio teto | Provedor de teste devolve 503 com `Retry-After: 7200` e observa as chamadas seguintes |
+| RCP-041 | Não faz tentativa de revogação, automática ou do calendário, antes do instante indicado por `Retry-After`, contado até no máximo 24 horas (RCP-050), e encerra as tentativas automáticas quando a espera passa do próprio teto | Provedor de teste devolve 503 com `Retry-After: 7200` e observa as chamadas seguintes |
 | RCP-042 | Trata como inválido o CPF que não tem 11 dígitos com dígitos verificadores certos ou que tem onze algarismos iguais, tanto no `patient.cpf` recebido quanto no CPF do paciente que inicia a jornada. Com o CPF do paciente inválido, não inicia a jornada nem troca o código | Provedor de teste devolve `11111111111`: revogação com `RECEIVER_TERMINATION`. Aplicativo informa `00000000000`: nenhuma chamada ao provedor |
 | RCP-043 | Não segue `link` de paginação com componente de usuário e não faz requisição fora do `fhir_base_url` a partir de link relativo | Provedor de teste devolve `next` com `usuario@` antes do host certo, e `next` relativos que resolvem dentro e fora da base |
 | RCP-044 | Com mais de uma extensão `payment-link` no `Appointment`, não abre link nenhum | Provedor de teste devolve duas extensões |
@@ -289,7 +291,9 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | RCP-047 | Com o registro local expirado, não troca código de autorização, nem de jornada aberta antes do vencimento | Abrir a jornada, deixar o registro do receptor expirar, entregar o retorno da autorização |
 | RCP-048 | Não chama provedor que não está `active` no registro aceito, ou sem versão efetiva, nem para revogar. Mantém as revogações pendentes para ele à vista do paciente, com a página do provedor, e retoma o calendário quando ele volta a `active` | Suspender o provedor de teste com uma revogação pendente, observar as chamadas, reativar |
 | RCP-049 | Não trata como geral um preço que traz contexto de uso que o receptor não reconhece | Provedor de teste devolve preço com `useContext` de outro sistema de códigos, e com `venue` sem referência |
+| RCP-050 | Na revogação, trata `Retry-After` maior que 24 horas como 24 horas e, passado esse prazo, retoma o calendário da seção 4.4 | Provedor de teste devolve 503 com `Retry-After: 172800` e observa a chamada seguinte, que vem em até 24 horas mais o intervalo do calendário |
+| RCP-051 | Resolve `link` de paginação relativo contra a URL da requisição que devolveu o Bundle e o segue quando a URL resultante passa nas conferências da seção 5.1 | Provedor de teste devolve `next` igual a `?page=2` e a um caminho absoluto dentro da base: o receptor busca a página seguinte |
 
-São 180 identificadores, dos quais 2 retirados e 178 em vigor (contados por script sobre este arquivo). A versão 0.2.1 acrescentou REG-007 a REG-010, AUT-026, AUT-027, API-012, AGD-015 a AGD-017 e RCP-027 a RCP-037. A versão 0.2.2 acrescentou REG-011 a REG-013, CNS-025, API-013, CAT-005 e RCP-038 a RCP-049.
+São 184 identificadores, dos quais 2 retirados e 182 em vigor (contados por script sobre este arquivo). A versão 0.2.1 acrescentou REG-007 a REG-010, AUT-026, AUT-027, API-012, AGD-015 a AGD-017 e RCP-027 a RCP-037. A versão 0.2.2 acrescentou REG-011 a REG-013, CNS-025, CNS-026, API-013, CAT-005, ERR-007 e RCP-038 a RCP-051.
 
 RCP-002, RCP-015, RCP-023, RCP-025 e as partes de tela de RCP-028 e RCP-048 não se provam só com teste de caixa-preta. Uma suíte automatizada cobre os demais, e esses pedem inspeção ou declaração auditável. O mesmo vale, do lado do provedor, para AUT-024, CNS-008 e CNS-023, que dependem de olhar telas.

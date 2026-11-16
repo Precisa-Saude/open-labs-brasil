@@ -6,7 +6,7 @@ Este arquivo é de trabalho. Ele registra o que foi decidido, o que mudou nesta 
 
 ## Sumário
 
-A. [Quarta rodada: as catorze leituras do cliente (0.2.2)](#a-quarta-rodada-as-catorze-leituras-do-cliente-022)
+A. [Quarta rodada: as catorze leituras do cliente (0.2.2)](#a-quarta-rodada-as-catorze-leituras-do-cliente-022), com as correções da seção A.5
 0. [Terceira rodada: esclarecimentos da 0.2.1](#0-terceira-rodada-esclarecimentos-da-021)
 1. [Estado de cada decisão](#1-estado-de-cada-decisão)
 2. [Escolhas feitas nesta revisão](#2-escolhas-feitas-nesta-revisão)
@@ -33,7 +33,7 @@ Escritos antes de mexer nos capítulos. A coluna "Situação" foi preenchida no 
 | 5 | Versão do documento `0.2.2` no índice, no README, na seção 9.1 e no `CHANGELOG.md` | Busca por `0.2.1` nos textos que dão a versão atual | Cumprido. Índice, README, 9.1 e `CHANGELOG.md`. As menções a 0.2.1 que restam são históricas |
 | 6 | Blocos Mermaid alterados passam no validador do Mermaid Chart, e os que não mudaram são idênticos aos de `main` | Validador e comparação por script | Cumprido. Seção 7, quarta rodada |
 | 7 | Schema e exemplo de registro: o exemplo valida contra o schema alterado, a variação que fere a regra nova é recusada, e a assinatura do exemplo continua verificando | Ajv 8 em modo estrito e verificação PS256 | Cumprido. Seção 7, quarta rodada |
-| 8 | Identificadores de conformidade: todos os de `main` presentes, com o mesmo número e na mesma ordem; os novos só acrescentados; nenhum repetido | Script contra `origin/main` | Cumprido. 162 de `main` intactos, 18 novos, 180 no total |
+| 8 | Identificadores de conformidade: todos os de `main` presentes, com o mesmo número e na mesma ordem; os novos só acrescentados; nenhum repetido | Script contra `origin/main` | Cumprido. 162 de `main` intactos, 22 novos, 184 no total (depois das correções da seção A.5) |
 | 9 | Links relativos resolvem, blocos JSON são válidos, todo rótulo de fonte existe em `docs/FONTES.md`, nenhum travessão | Scripts | Cumprido. Seção 7, quarta rodada |
 | 10 | Toda afirmação nova sobre fonte externa conferida na fonte primária e registrada em `docs/FONTES.md` com acesso em 2026-11-17 | `docs/FONTES.md` | Cumprido. `docs/FONTES.md`, linhas marcadas **(2026-11-17)** |
 
@@ -50,9 +50,9 @@ Desta vez li o código do cliente (PR #177, commit `b74c4b3`), além da descriç
 | 3 | Momento de gravar a revogação | Grava depois das três tentativas, como o texto dizia | Grava no momento da decisão, antes da primeira tentativa | 4.4, 2.6, RCP-038 | Receptor |
 | 4 | 404 sem código | Mantém a pendência | Igual. O código é lido do `OperationOutcome` | 4.4, 6.4, RCP-039 | Receptor |
 | 5 | Falha que não admite repetição | Vai direto para a pendência | Igual, com a lista das falhas | 4.4, RCP-040 | Receptor |
-| 6 | `Retry-After` acima do teto | Encerra as tentativas e grava a pendência | Igual, e nenhuma tentativa, nem do calendário, antes do instante indicado | 4.4, 6.4, RCP-041 | Receptor |
+| 6 | `Retry-After` acima do teto | Encerra as tentativas e grava a pendência | Igual, e nenhuma tentativa, nem do calendário, antes do instante indicado, até o limite de 24 horas (A.5) | 4.4, 6.4, 6.5, RCP-041, RCP-050, ERR-007 | Os dois lados |
 | 7 | CPF de algarismos iguais | Inválido, inclusive o CPF que o aplicativo informa | Igual, e o provedor trata CPF inválido no cadastro como ausência de CPF | 4.4, T5, CNS-025, RCP-042 | Os dois lados |
-| 8 | Usuário na URL e link relativo | Recusa os dois | Usuário: recusa. Relativo: recusar ou resolver, os dois valem na 0.2. Provedor emite link absoluto | 5.1, API-013, RCP-043 | Os dois lados, em parte |
+| 8 | Usuário na URL e link relativo | Recusa os dois | Usuário: recusa. Relativo: o receptor resolve e confere a URL resultante na 0.2 (A.5). Provedor emite link absoluto | 5.1, API-013, RCP-043, RCP-051 | Os dois lados |
 | 9 | Domínio do link de pagamento | Não confere o domínio, não lê extensão repetida | Igual. O domínio é obrigação do provedor | 5.5.5, RCP-044 | Receptor, só a extensão repetida |
 | 10 | Paciente só por CPF | Exige a referência | Receptor: só referência, sem `identifier`. Provedor: continua aceitando CPF na 0.2. Perfil sem mudança | 5.5.5, 3.5, RCP-045 | Receptor |
 | 11 | Versão que o software não implementa | Não oferece o provedor, nem com `api_base_url` incoerente | Igual, para os dois lados | 9.1, REG-012, RCP-046 | Os dois lados |
@@ -74,7 +74,7 @@ Desta vez li o código do cliente (PR #177, commit `b74c4b3`), além da descriç
 
 **7. CPF de algarismos iguais.** Alternativa: só o receptor recusar. Motivo de ir além: se o provedor aprovasse um paciente cujo cadastro tem `00000000000`, o receptor descartaria tudo com `RECEIVER_TERMINATION`, e o histórico do consentimento diria "o receptor desistiu", quando o problema é o cadastro do laboratório. Com a regra no provedor, o desfecho é `PATIENT_WITHOUT_CPF`, que diz a verdade. Um receptor da 0.2.1 entende esse código, então a mudança não quebra nada. Exigir que o CPF do paciente seja conferido antes da jornada evita levar o paciente ao login do laboratório para nada.
 
-**8. Paginação.** Alternativa: tornar obrigatória a recusa do link relativo, como faz o cliente. Por que não: seção A.3. Componente de usuário: recusa obrigatória, com apoio do RFC 9110, seção 4.2.4. O provedor passa a emitir sempre link absoluto, o que funciona com qualquer receptor.
+**8. Paginação.** Alternativa: tornar obrigatória a recusa do link relativo, como faz o cliente. Por que não: seções A.3 e A.5. Componente de usuário: recusa obrigatória, com apoio do RFC 9110, seção 4.2.4. O provedor passa a emitir sempre link absoluto, o que funciona com qualquer receptor.
 
 **9. Domínio do link de pagamento.** Alternativa: acrescentar ao registro a lista de domínios de pagamento de cada provedor. Por que não: o schema do registro recusa campo desconhecido (`additionalProperties: false`), então um campo novo faria todo verificador da 0.2.1 recusar o registro inteiro. Seria mudança de formato e de protocolo, coisa para a 0.3. Do jeito que ficou, o domínio é obrigação do provedor (AGD-007), conferida na admissão e pela suíte, e o receptor confere o que tem como conferir. Abrir no navegador do sistema mostra o endereço ao paciente.
 
@@ -98,13 +98,13 @@ Não é preciso fazer isso para a 0.2.2.
 
 A versão de protocolo continua `0.2`, e implementações da 0.2.0, 0.2.1 e 0.2.2 precisam continuar se falando. Em dois pontos a regra completa cortaria essa comunicação. Nos dois, a 0.2.2 fixa a parte que não quebra, e a seção 9.1 passou a dizer que um PATCH funciona assim.
 
-- **Ponto 8, link relativo.** O FHIR R4 não exige link de paginação absoluto: diz que é opaco ao cliente, e só o exemplo usa URL absoluta (página `http`, seção 3.1.0.14). Um provedor da 0.2.1 que emite `?page=2` podia se ler conforme. Tornar a recusa obrigatória no receptor cortaria a paginação com ele. Feito: o provedor da 0.2.2 emite link absoluto (API-013), e o receptor pode recusar ou resolver o relativo pelo RFC 3986, desde que nenhuma requisição saia da base (RCP-043). A recusa do cliente continua conforme. **Fica para a 0.3:** recusa obrigatória do link relativo.
+- **Ponto 8, link relativo.** O FHIR R4 não exige link de paginação absoluto: diz que é opaco ao cliente, e só o exemplo usa URL absoluta (página `http`, seção 3.1.0.14). Um provedor da 0.2.1 que emite `?page=2` podia se ler conforme. Tornar a recusa obrigatória no receptor cortaria a paginação com ele. Feito: o provedor da 0.2.2 emite link absoluto (API-013), e o receptor resolve o relativo pelo RFC 3986 e confere a URL resultante (RCP-051). Na primeira versão deste PR o receptor podia escolher entre recusar e resolver, o que ainda cortava a paginação quando ele recusava. A correção está na seção A.5. **Fica para a 0.3:** recusa obrigatória do link relativo.
 - **Ponto 10, provedor aceitar o CPF.** A 0.2.1 obrigava o provedor a aceitar o paciente só por CPF. Um receptor da 0.2.0 ou da 0.2.1 que tenha usado essa forma teria o agendamento recusado por um provedor da 0.2.2, se a aceitação saísse agora. Feito: o receptor da 0.2.2 só usa a referência (RCP-045), e o provedor continua aceitando o CPF na 0.2. **Fica para a 0.3:** retirar a aceitação e, se quiser, a mudança no perfil descrita no ponto 10.
 - **Ponto 9, alternativa não adotada.** A lista de domínios no registro exigiria mudar o formato do registro de um jeito que verificadores da 0.2.1 recusam. Não foi preciso parar aqui porque a regra escolhida não depende dela, mas ela fica anotada para a 0.3.
 
 ### A.4 O que muda no cliente e no servidor de exemplo
 
-**Cliente (PR #177, conferido no código, commit `b74c4b3`).** Os pontos 4, 5, 8, 9, 11, 12, 13 e 14 coincidem com o que ele já faz. Precisam de mudança:
+**Cliente (PR #177, conferido no código, commit `b74c4b3`, antes de ele ser atualizado para a 0.2.2).** Os pontos 4, 5, 8, 9, 11, 12, 13 e 14 coincidiam com o que ele fazia. As correções da seção A.5 acrescentam mudanças nos pontos 5 (429 sem código), 6 (teto de 24 horas) e 8 (resolver link relativo). Precisam de mudança:
 
 | Ponto | O que mudar | Requisito |
 | --- | --- | --- |
@@ -114,7 +114,7 @@ A versão de protocolo continua `0.2`, e implementações da 0.2.0, 0.2.1 e 0.2.
 | 7 | O CPF esperado só é conferido em `completeAuthorization`, depois do login do paciente no laboratório. `startAuthorization` não recebe o CPF. Para cumprir RCP-042, a conferência precisa acontecer antes de criar o consentimento, no pacote ou no aplicativo | RCP-042 |
 | 10 | O agendamento exige a referência certa, mas não recusa `identifier` junto dela no participante ou no `subject` | RCP-045 |
 
-Sem mudança de comportamento, mas com ajuste pequeno: no ponto 1, a biblioteca JOSE que o cliente usa (jose 6.2.17, mesma versão) já recusa `crit` desconhecido, conferido por script, só que o erro sai como passo V6 e não V3. Faltam ainda testes com os identificadores novos (REG-011, REG-012, RCP-038 a RCP-049) e a atualização da tabela de conformidade do README do pacote. No ponto 13, a tentativa imediata quando o provedor volta a `active` é recomendação (DEVERIA), e o cliente hoje espera o próximo vencimento.
+Sem mudança de comportamento, mas com ajuste pequeno: no ponto 1, a biblioteca JOSE que o cliente usa (jose 6.2.17, mesma versão) já recusa `crit` desconhecido, conferido por script, só que o erro sai como passo V6 e não V3. Faltam ainda testes com os identificadores novos (REG-011, REG-012, RCP-038 a RCP-051) e a atualização da tabela de conformidade do README do pacote. No ponto 13, a tentativa imediata quando o provedor volta a `active` é recomendação (DEVERIA), e o cliente hoje espera o próximo vencimento.
 
 **Servidor de exemplo e suíte (ramo `feat/servidor-de-exemplo-e-suite`).** Li só o plano e a lista de arquivos do commit `016b45c`, por comandos de leitura do Git, sem abrir o código. O plano diz que o servidor implementa a 0.2.1 como está escrita e que `comum/` tem CPF, verificação do registro e negociação. Pelo que a 0.2.2 exige do provedor, a conferir ou mudar:
 
@@ -129,6 +129,23 @@ Sem mudança de comportamento, mas com ajuste pequeno: no ponto 1, a biblioteca 
 | 14 | Preços sintéticos só com `venue` e `brand`, com referência. Teste novo | CAT-005 |
 
 No ponto 10 o servidor não muda: continua aceitando o paciente só por CPF. A lista de pontos ambíguos que o plano prevê (`docs/pontos-da-especificacao.md`) pode se sobrepor a esta rodada.
+
+### A.5 Correções pedidas pelo cliente depois da primeira versão da 0.2.2
+
+O cliente foi atualizado para o rascunho da 0.2.2 (fhir-brasil, PR #177, commit `a52b5dd`) e achou quatro problemas no texto novo. Foram corrigidos no mesmo PR, antes de a 0.2.2 entrar no ramo principal, e ficam na mesma entrada do `CHANGELOG.md`.
+
+| # | Problema | Regra | Requisitos | O cliente muda? |
+| --- | --- | --- | --- | --- |
+| 1 | O item 4 da revogação pendente chamava de não repetível todo 4xx do `DELETE`, e o item 3 dava 429 e 401 `TOKEN_INVALID` como repetíveis | 429 (com ou sem código do protocolo) e 401 `TOKEN_INVALID` admitem repetição; os demais 4xx fora das conclusões do item 8 não. A regra 5 da seção 6.4, que dizia "4xx não se repete" para código desconhecido, ganhou a mesma exceção para 429 | 4.4, 6.4, RCP-040 (texto inalterado, aponta para a 4.4) | **Sim, pouco.** 429 com código do protocolo e 401 `TOKEN_INVALID` já são repetidos. Um 429 sem `OperationOutcome` cai em `retryByStatus`, que só repete 5xx: precisa repetir também 429 |
+| 2 | Um `Retry-After` suspendia o calendário sem limite | Na revogação, `Retry-After` vale no máximo 24 horas; acima disso o receptor o trata como 24 horas e retoma o calendário. O provedor não envia mais que 86400 segundos no `DELETE` de consentimento nem no token de `consent.manage` | 4.4 item 5, 5.1, 6.4, 6.5, RCP-041 (texto), RCP-050, ERR-007 | **Sim.** O cliente já respeita `Retry-After` no calendário (`notBefore`), mas sem teto |
+| 3 | Revogação achada no reinício que outra instância ainda está tentando | Não há trava entre instâncias. `DELETE` repetido ou concorrente é inofensivo e esperado: 204 numa chamada, 422 `CONSENT_INVALID_STATE` nas outras, e as duas encerram a pendência. O provedor aplica a transição uma vez, mantém o motivo da primeira e nunca responde 409 nem 5xx por concorrência | 4.4 itens 6 e "Encerramento", 6.5, CNS-026 | **Não.** Ele já trata 422 `CONSENT_INVALID_STATE` como conclusão e não usa trava |
+| 4 | Recusar link relativo também corta a paginação com provedor da 0.2.0 ou 0.2.1 | Na 0.2 o receptor DEVE resolver o link relativo contra a URL da requisição (RFC 3986, seção 5.2) e aplicar à URL resultante as conferências de esquema, host, porta, prefixo e componente de usuário. A recusa fica para a 0.3 | 5.1, RCP-043 (texto inalterado), RCP-051 | **Sim.** `isInsideBase` faz `new URL(candidate)` sem base, e com isso todo link relativo é recusado. Precisa resolver contra a URL da requisição antes de conferir |
+
+**Por que 24 horas no ponto 2.** É o intervalo do calendário depois do primeiro dia, então um único cabeçalho atrasa a revogação em no máximo um ciclo diário. Cobre uma janela de manutenção de um dia inteiro, que é mais do que um laboratório costuma anunciar. O atraso não reabre acesso, porque o receptor descartou os tokens no momento da decisão, e o paciente vê a página do provedor durante a pendência. O custo está no primeiro dia: um `Retry-After` de 24 horas logo de saída troca as tentativas de hora em hora por uma só. Um teto de uma hora preservaria o primeiro dia, mas proibiria o provedor de anunciar uma manutenção noturna, e por isso fiquei com o número que o cliente sugeriu.
+
+**Por que resolver, e não recusar, no ponto 4.** Procurei no FHIR R4 um motivo para permitir a recusa e achei o contrário: o tipo `uri`, de `Bundle.link.url`, "can be absolute or relative" (página `datatypes`, seção 2.24.0.1), e a página `http` diz que os links são opacos e que o cliente usa os que o servidor dá. Um provedor que emite `?page=2` está dentro do FHIR. Resolver e depois conferir a URL resultante dá a mesma proteção da recusa: um link relativo de rede como `//outro.example/x` resolve para outro host e é recusado do mesmo jeito.
+
+**Identificadores.** Novos: CNS-026, ERR-007, RCP-050, RCP-051. O texto de RCP-041, que entrou neste mesmo PR e ainda não foi publicado, ganhou a referência ao limite de 24 horas. O teste dele (503 com `Retry-After: 7200`) continua igual. RCP-043 não mudou: continua verdadeiro com a regra nova.
 
 ## 0. Terceira rodada: esclarecimentos da 0.2.1
 
@@ -461,7 +478,7 @@ Minha leitura do risco, que não é parecer jurídico: um regulamento poderia me
 - O exemplo de registro e a assinatura não mudaram. A assinatura PS256 verifica, o `kid` é o thumbprint da chave, e o segundo campo do JWS está vazio. Nenhuma chave nova foi gerada.
 - Cabeçalho do JWS: com a biblioteca jose 6.2.17, a verificação compacta aceita `typ` igual a `JWT` com membro a mais e recusa `crit` desconhecido (`ERR_JOSE_NOT_SUPPORTED`), com uma chave RSA gerada em memória e descartada.
 - CPF: as dez sequências de um só algarismo passam no cálculo dos dígitos verificadores, conferido por script.
-- Identificadores de conformidade, contra `origin/main`: os 162 continuam presentes, na mesma ordem e com o mesmo texto, salvo a coluna de teste de REG-010, que ganhou uma frase. Foram acrescentados 18, sem repetição e em sequência contínua dentro de cada prefixo. Total 180, 2 retirados, 178 em vigor.
+- Identificadores de conformidade, contra `origin/main`: os 162 continuam presentes, na mesma ordem e com o mesmo texto, salvo a coluna de teste de REG-010, que ganhou uma frase. Foram acrescentados 22 (18 na primeira versão deste PR, 4 nas correções da seção A.5), sem repetição e em sequência contínua dentro de cada prefixo. Total 184, 2 retirados, 182 em vigor.
 - Links relativos de todos os Markdown resolvem para arquivos existentes. Todo bloco JSON dos Markdown é JSON válido. Todo rótulo de fonte da especificação está em `docs/FONTES.md`. Nenhum travessão (nem meia-risca) e nenhuma chave dupla.
 - `docs/FONTES.md` tinha, desde a 0.2.1, uma cópia quase inteira do próprio arquivo colada no meio da linha de [FHIR-SEARCH], onde deveria estar o caractere `$`. O trecho foi tirado e a linha voltou ao texto pretendido.
 

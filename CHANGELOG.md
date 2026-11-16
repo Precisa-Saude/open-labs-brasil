@@ -16,10 +16,10 @@ Em dois pontos (8 e 10) a regra mais estrita cortaria a comunicação com uma im
 2. **Uma versão por participante na fase 0 (nenhum comportamento muda).** O schema do registro passou a recusar a lista de `protocol_versions` que traz uma versão `0.x` junto com outra. O texto já proibia isso. Quem valida o registro contra o schema passa a recusar o documento com esse erro (REG-003). Seção 8.2, schema, coluna de teste de REG-010.
 3. **Quando gravar a revogação (fixa comportamento, receptor).** A revogação é gravada em armazenamento durável no momento em que é decidida, antes da primeira tentativa, e não só depois das três. Seção 4.4, fluxo 2.6, RCP-038.
 4. **404 sem código na revogação (fixa comportamento, receptor).** Só o 404 com `CONSENT_NOT_FOUND` no `OperationOutcome` encerra a pendência. Seções 4.4 e 6.4, RCP-039.
-5. **Falha que não admite repetição (fixa comportamento, receptor).** `invalid_client`, `unauthorized_client`, outros 4xx e as condições locais que impedem a chamada encerram as tentativas automáticas na hora, e a revogação fica pendente. Seção 4.4, RCP-040.
-6. **`Retry-After` longo (fixa comportamento, receptor).** O receptor pode ter um teto de espera. Acima dele, as tentativas automáticas terminam e a revogação fica pendente. Nenhuma tentativa acontece antes do instante indicado. Seções 4.4 e 6.4, RCP-041.
+5. **Falha que não admite repetição (fixa comportamento, receptor).** `invalid_client`, `unauthorized_client`, outros 4xx (salvo 429 e 401 `TOKEN_INVALID`, que admitem repetição) e as condições locais que impedem a chamada encerram as tentativas automáticas na hora, e a revogação fica pendente. Seção 4.4, RCP-040.
+6. **`Retry-After` longo (fixa comportamento, provedor e receptor).** O receptor pode ter um teto de espera. Acima dele, as tentativas automáticas terminam e a revogação fica pendente. Nenhuma tentativa acontece antes do instante indicado, mas na revogação um `Retry-After` vale por no máximo 24 horas, e o provedor não envia valor maior nesses endpoints. Seções 4.4, 6.4 e 6.5, RCP-041, RCP-050, ERR-007.
 7. **CPF de onze algarismos iguais (fixa comportamento, provedor e receptor).** Passa no cálculo dos dígitos verificadores e mesmo assim é inválido. O provedor trata o paciente com CPF inválido no cadastro como paciente sem CPF (T5). O receptor o trata como inválido no CPF recebido e no do paciente, e com o do paciente inválido a jornada não começa. Seção 4.4, CNS-025, RCP-042.
-8. **Paginação (fixa comportamento, provedor e receptor, em parte).** O provedor emite links absolutos `https` sem componente de usuário. O receptor recusa link com componente de usuário. Link relativo: na 0.2 o receptor pode recusá-lo ou resolvê-lo contra a URL da requisição, e nas duas formas não sai da base. A recusa obrigatória fica para a próxima versão de protocolo. Seção 5.1, API-013, RCP-043.
+8. **Paginação (fixa comportamento, provedor e receptor).** O provedor emite links absolutos `https` sem componente de usuário. O receptor recusa link com componente de usuário. Link relativo: na 0.2 o receptor resolve contra a URL da requisição e aplica à URL resultante as mesmas conferências. A recusa do link relativo fica para a próxima versão de protocolo. Seção 5.1, API-013, RCP-043, RCP-051.
 9. **Domínio do link de pagamento (fixa comportamento, receptor, só no caso de extensão repetida).** O domínio é obrigação do provedor, e o receptor não é obrigado a conferi-lo, porque o registro não lista domínios. Com mais de uma extensão `payment-link`, o receptor não abre nenhuma. Seção 5.5.5, RCP-044.
 10. **Paciente no agendamento (fixa comportamento, receptor; provedor sem mudança).** O receptor identifica o paciente só por `Patient/{fhir_id}`, sem `identifier`. O provedor continua aceitando o paciente só por CPF enquanto a versão de protocolo for `0.2`. O perfil do guia não muda. Seção 5.5.5, RCP-045.
 11. **Versão que o software não implementa (fixa comportamento, provedor e receptor).** A versão efetiva que o próprio software não implementa conta como inexistente. O receptor também não se comunica com provedor cujo `api_base_url` não termina em `/v{M}`. Seção 9.1, REG-012, RCP-046.
@@ -27,9 +27,19 @@ Em dois pontos (8 e 10) a regra mais estrita cortaria a comunicação com uma im
 13. **Provedor suspenso e revogação (fixa comportamento, receptor).** Nenhuma chamada a provedor fora de `active` ou sem versão efetiva, nem para revogar. As pendências esperam, com a página do provedor à vista do paciente. A frase da seção 9.1 que dizia o contrário foi corrigida. Seções 8.4, 9.1 e 4.4, RCP-048.
 14. **Contexto de preço desconhecido (fixa comportamento, provedor e receptor).** O provedor só usa `venue` e `brand` em `useContext`, com referência. O receptor não trata como geral o preço com contexto que não reconhece. Seção 5.5.2, CAT-005, RCP-049.
 
+### Correções antes da publicação
+
+O cliente atualizado para o rascunho da 0.2.2 achou quatro problemas no próprio texto da 0.2.2, corrigidos antes de ela entrar no ramo principal:
+
+- **Item 4 da revogação pendente contradizia o item 3.** Chamava de não repetível todo 4xx do `DELETE`, inclusive 429 e 401 `TOKEN_INVALID`, que o item 3 dá como repetíveis. Agora os dois ficam fora. A regra 5 da seção 6.4 dizia o mesmo de códigos desconhecidos e também foi corrigida (receptor).
+- **`Retry-After` sem limite.** Um único cabeçalho podia adiar a revogação indefinidamente. Agora vale por no máximo 24 horas na revogação, e o provedor não envia mais que 86400 segundos nos endpoints dela. Seções 4.4, 5.1 e 6.5, RCP-050, ERR-007 (provedor e receptor).
+- **Revogação achada no reinício e outra instância.** `DELETE` repetido ou concorrente é inofensivo e esperado: 204 numa chamada, 422 `CONSENT_INVALID_STATE` nas outras, e as duas encerram a pendência. O receptor não precisa de trava entre instâncias, e o provedor aplica a transição uma só vez. Seção 4.4, CNS-026 (provedor).
+- **Link relativo.** A 0.2.2 deixava o receptor recusar ou resolver, mas recusar corta a paginação com um provedor da 0.2.0 ou da 0.2.1 que emite link relativo, o que o FHIR R4 admite. Agora o receptor DEVE resolver e conferir a URL resultante. Seção 5.1, RCP-051 (receptor).
+- O texto de RCP-041, ainda não publicado, ganhou a referência ao limite de 24 horas. O teste dele não mudou.
+
 ### Requisitos de conformidade
 
-- Acrescentados: REG-011 a REG-013, CNS-025, API-013, CAT-005 e RCP-038 a RCP-049.
+- Acrescentados: REG-011 a REG-013, CNS-025, CNS-026, API-013, CAT-005, ERR-007 e RCP-038 a RCP-051.
 - Retirados: nenhum. Nenhum identificador foi renumerado. REG-010 manteve o texto e ganhou um teste a mais.
 
 ### Registro

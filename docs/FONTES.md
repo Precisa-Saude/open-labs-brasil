@@ -86,6 +86,7 @@ Publicador: HL7 International. Versão 4.0.1 ("R4 - Mixed Normative and STU"), p
 | Rótulo | Página | Usada para |
 | --- | --- | --- |
 | [FHIR-HTTP] | `http` | Interações REST, `create` e criação condicional com `If-None-Exist` (seção 3.1.0.8.1, de uso experimental, com o exemplo `identifier=http://my-lab-system|123`), links de paginação opacos para o cliente. Reaberta em 2026-11-17 a seção 3.1.0.14 (paginação) **(2026-11-17)**: os links são opacos e sem estrutura definida, o exemplo usa URLs absolutas, e o texto não exige que sejam absolutos. Status 409, 412 e 422, `If-Match`, `ETag`, `Prefer`, tipos MIME |
+| [FHIR-DATATYPES] | `datatypes` **(2026-11-17)** | Seção 2.24.0.1, tipo `uri`: "URIs can be absolute or relative". `Bundle.link.url` é desse tipo, então o FHIR R4 admite link de paginação relativo |
 | [FHIR-REFS] | `references` **(2026-11-16)** | Seção 2.3.0.8, recursos contidos: sem existência independente, desaconselhados quando o conteúdo pode ser identificado, sem `meta.versionId` nem `meta.lastUpdated`, sem aninhamento, regra `ref-1` |
 | [FHIR-SEARCH] | `search` | Parâmetros repetidos como "e", `_lastUpdated`, `_count`, `_include`, prefixos de data. Relida em 2026-11-16: sintaxe de token `sistema|código` e seção 3.1.1.4.19, escape de `$`, `,` e `|` com `\` |
 | [FHIR-CONSENT] | `consent` | Elementos e os seis códigos de `Consent.status` |
