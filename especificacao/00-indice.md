@@ -1,6 +1,6 @@
 # Open Labs Brasil: especificação do protocolo
 
-**Situação:** rascunho, fase de piloto. Versão 0.2.1, 2026-11-16. As mudanças de cada versão estão em `CHANGELOG.md`, na raiz. Nada aqui foi implementado ou testado contra um laboratório real.
+**Situação:** rascunho, fase de piloto. Versão 0.2.2, 2026-11-17. As mudanças de cada versão estão em `CHANGELOG.md`, na raiz. Nada aqui foi implementado ou testado contra um laboratório real.
 
 O Open Labs Brasil define como um aplicativo voltado ao paciente obtém acesso a catálogo, unidades, agenda, agendamento e resultados de um laboratório. Catálogo, unidades e agenda dependem só de um acordo entre o aplicativo e o laboratório. Agendamento e resultados dependem do consentimento do paciente, dado na página do próprio laboratório. O modelo de consentimento vem do Open Finance Brasil, o perfil de segurança é o FAPI 2.0 Security Profile, e os dados trafegam como recursos FHIR R4.
 

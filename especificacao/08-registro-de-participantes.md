@@ -40,7 +40,7 @@ Campos comuns de cada participante:
 | `cnpj` | texto | 14 caracteres, sem pontuação |
 | `contacts.technical_email` | texto | Contato de integração |
 | `contacts.security_email` | texto | Contato para incidentes |
-| `protocol_versions` | lista de texto | Versões `MAJOR.MINOR` do protocolo que o participante implementa. Enquanto o MAJOR for 0, exatamente uma. O significado e a regra de negociação estão em [09-versionamento-e-conformidade.md](09-versionamento-e-conformidade.md), seção 9.1 |
+| `protocol_versions` | lista de texto | Versões `MAJOR.MINOR` do protocolo que o software do participante implementa, e nenhuma outra. Enquanto o MAJOR for 0, exatamente uma: o schema recusa a lista que traz uma versão `0.x` junto com qualquer outra. O significado e a regra de negociação estão em [09-versionamento-e-conformidade.md](09-versionamento-e-conformidade.md), seção 9.1 |
 | `updated_at` | data e hora | Última alteração da entrada |
 
 Bloco `provider`, presente quando `role` é `provider`:
@@ -128,7 +128,7 @@ Esta é a lista completa. Um participante que já aceitou o documento de `sequen
 | --- | --- | --- |
 | V1 | Baixa `participantes.json` e `participantes.json.jws` por HTTPS, com o certificado do servidor validado | A conexão não é HTTPS válida, ou um dos arquivos falta |
 | V2 | O `.jws` tem três campos separados por ponto, com o segundo vazio | Formato diferente |
-| V3 | O cabeçalho protegido tem `alg` igual a `PS256` | Qualquer outro algoritmo, inclusive `none` |
+| V3 | O cabeçalho protegido tem `alg` igual a `PS256` e não tem `crit` | Qualquer outro algoritmo, inclusive `none`, ou `crit` presente |
 | V4 | O `kid` do cabeçalho está em `registry_keys` do documento N que o participante já tem | Chave desconhecida. Chaves do próprio candidato não servem para verificá-lo |
 | V5 | O `kid` dessa chave é igual ao thumbprint SHA-256 dela, recalculado pelo participante [RFC7638], e a chave é RSA de 2048 bits ou mais | `kid` que não confere, ou chave menor |
 | V6 | A assinatura PS256 verifica sobre `BASE64URL(cabeçalho) || '.' || BASE64URL(bytes baixados)` | Assinatura inválida |
@@ -143,6 +143,11 @@ Esta é a lista completa. Um participante que já aceitou o documento de `sequen
 
 Passados os catorze passos, o participante aceita o documento e passa a usar o `registry_keys` dele para verificar o próximo.
 
+**Os demais membros do cabeçalho.** O mantenedor assina sempre com o cabeçalho do item 2 de "Como o mantenedor assina". Quem verifica, porém, confere só `alg` (V3) e usa só `kid` (V4). Um `typ` diferente de `JOSE`, ou um membro a mais, não é motivo de recusa: o cabeçalho é coberto pela assinatura, então quem o escreveu tinha a chave do registro. O [RFC7515] diz o mesmo: `typ` é ignorado pela implementação de JWS e fica a cargo da aplicação (seção 4.1.9), e um membro que não se entende é ignorado, salvo se listado em `crit` (seção 4). Duas regras completam a leitura:
+
+- O participante NÃO DEVE usar nenhum outro membro do cabeçalho, como `jwk`, `jku`, `x5u`, `x5c`, `x5t` ou `x5t#S256`, para obter ou escolher a chave. A chave vem só de `registry_keys` do documento N, ou do conjunto inicial, pelo `kid`.
+- O participante DEVE recusar o candidato que traz `crit` (V3). O protocolo não define extensão de cabeçalho, então todo nome listado em `crit` é de uma extensão que o participante não entende, e nesse caso o JWS é inválido ([RFC7515], seção 4.1.11).
+
 Quando `sequence` é igual a N, o participante confere se os bytes são os mesmos que já tem. Se forem, segue com o documento atual. Se não forem, recusa e avisa o mantenedor: dois documentos diferentes com a mesma sequência indicam erro de publicação ou adulteração.
 
 O primeiro documento é verificado com o conjunto de chaves inicial, entregue a cada participante na admissão por canal separado e conferido pelo thumbprint. Os passos são os mesmos, com o conjunto inicial no lugar de `registry_keys` do documento N em V4.
@@ -154,18 +159,20 @@ Um participante que recusa um candidato continua usando o documento atual até e
 | Operação | Nos 7 dias seguintes a `expires_at` | Depois disso |
 | --- | --- | --- |
 | Novas autorizações (PAR) e criação de consentimento | Recusadas | Recusadas |
+| Troca de código de autorização (concessão `authorization_code`), inclusive de jornada aberta antes de `expires_at` | Recusada | Recusada |
 | Concessão `client_credentials` com `catalog.read`, `locations.read` ou `schedule.read` | Recusada | Recusada |
 | Concessão `client_credentials` com `consent.manage` como único escopo | **Aceita**, para receptor que estava `active` no último documento aceito. O token só serve para `GET` e `DELETE` de consentimento | Recusada |
 | Renovação por refresh token de consentimento já `AUTHORISED` | PODE continuar | Recusada |
 | Tokens de acesso já emitidos | Valem até expirar | Valem até expirar |
 
-A terceira linha existe para que a revogação pedida por um paciente não fique bloqueada por um atraso administrativo na publicação do registro. Revogar só reduz acesso, então o risco de aceitar o pedido de um receptor cuja situação não pôde ser reconferida é pequeno, e é menor que o de manter um consentimento que o paciente quis encerrar. Sem essa linha, o texto permitiria que dados continuassem fluindo por refresh token durante 7 dias e, no mesmo período, impediria o paciente de interromper o fluxo pelo aplicativo.
+A linha da concessão `client_credentials` com `consent.manage` existe para que a revogação pedida por um paciente não fique bloqueada por um atraso administrativo na publicação do registro. Revogar só reduz acesso, então o risco de aceitar o pedido de um receptor cuja situação não pôde ser reconferida é pequeno, e é menor que o de manter um consentimento que o paciente quis encerrar. Sem essa linha, o texto permitiria que dados continuassem fluindo por refresh token durante 7 dias e, no mesmo período, impediria o paciente de interromper o fluxo pelo aplicativo.
 
 Regras do modo restrito:
 
-- O provedor DEVE aceitar a concessão da terceira linha e DEVE recusar `POST /consents` feito com esse token, com 403 e `REGISTRY_EXPIRED`.
-- O provedor recusa as demais concessões com `unauthorized_client`.
-- O receptor cujo registro local expirou NÃO DEVE iniciar jornadas nem pedir tokens de catálogo, unidades ou agenda. Ele DEVE continuar tentando as revogações pendentes, com tokens de escopo único `consent.manage`.
+- O provedor DEVE aceitar a concessão `client_credentials` com `consent.manage` como único escopo e DEVE recusar `POST /consents` feito com esse token, com 403 e `REGISTRY_EXPIRED`.
+- O provedor recusa as demais concessões com `unauthorized_client`, inclusive `authorization_code`.
+- O receptor cujo registro local expirou NÃO DEVE iniciar jornadas nem pedir tokens de catálogo, unidades ou agenda. Ele DEVE continuar tentando as revogações pendentes, com tokens de escopo único `consent.manage`, para provedores que estavam `active` no último documento aceito (seção 8.4).
+- **Jornada aberta antes do vencimento.** A troca do código faz parte da jornada. O receptor cujo registro local expirou NÃO DEVE trocar um código de autorização, mesmo de jornada aberta antes de `expires_at`. Sem a troca, o código perde a validade em 60 segundos e o provedor aplica T14 ([04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.3): o consentimento vai a `REVOKED` sem que nenhum token tenha sido emitido. O receptor avisa o paciente de que a conexão não foi concluída e de que ele pode tentar de novo quando houver registro válido, com novo consentimento.
 - Passados os 7 dias, o receptor mantém a revogação pendente e a mostra ao paciente, junto com o endereço da página de consentimentos do provedor, que é o caminho garantido ([04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Revogação pendente").
 
 ## 8.4 Atualização e cache
@@ -183,6 +190,8 @@ Efeito do `status` de um receptor no provedor:
 | `withdrawn` | Recusadas | Recusados | Passam a `REVOKED` com `RECEIVER_WITHDRAWN` |
 
 Um provedor `suspended` ou `withdrawn` deixa de ser oferecido pelos receptores a novos pacientes. Os receptores param de chamá-lo.
+
+"Parar de chamar" vale para toda chamada, inclusive a revogação de consentimento. O receptor NÃO DEVE chamar endpoint nenhum de um provedor que não está `active` no registro que ele aceitou. As revogações pendentes para esse provedor continuam gravadas e continuam à vista do paciente, com o endereço da página de consentimentos do provedor, que é por onde ele pode revogar enquanto isso ([04-ciclo-de-vida-do-consentimento.md](04-ciclo-de-vida-do-consentimento.md), seção 4.4, "Revogação pendente"). Se o provedor volta a `active`, o receptor retoma o calendário das pendências. A mesma regra vale quando o próprio receptor não está `active` e quando não há versão efetiva entre os dois ([09-versionamento-e-conformidade.md](09-versionamento-e-conformidade.md), seção 9.1).
 
 ## 8.5 Rotação
 
