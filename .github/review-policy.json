@@ -1,0 +1,15 @@
+{
+  "enabled": false,
+  "provider": "github-models",
+  "fallbackProviders": [],
+  "includePaths": [
+    "comum/**",
+    "servidor-de-exemplo/**",
+    "suite-de-conformidade/**",
+    "ambiente-local/**",
+    "ferramentas/**"
+  ],
+  "excludePaths": ["**/fixtures/**"],
+  "scanForSecretsBeforeSending": true,
+  "onSensitiveContent": "block"
+}

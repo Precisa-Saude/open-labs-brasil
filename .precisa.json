@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "name": "open-labs-brasil",
+  "owner": "Precisa-Saude",
+  "visibility": "oss",
+  "hasSite": false,
+  "hasPackages": false,
+  "publishesToNpm": false,
+  "commitScopes": [
+    "especificacao",
+    "registro",
+    "servidor",
+    "suite",
+    "ambiente",
+    "ferramentas",
+    "docs",
+    "ci",
+    "deps",
+    "lint",
+    "config"
+  ],
+  "contactEmails": {
+    "security": "security@precisa-saude.com.br",
+    "conduct": "conduct@precisa-saude.com.br"
+  },
+  "nodeVersion": "22.18",
+  "pnpmVersion": "10.33.0",
+  "requiredScripts": ["conferir"]
+}

@@ -1,32 +1,57 @@
 {
   "name": "open-labs-brasil-ferramentas",
-  "private": true,
   "version": "0.2.2",
+  "private": true,
   "description": "Servidor de exemplo, suíte de conformidade e ambiente local de teste do Open Labs Brasil",
   "license": "Apache-2.0",
   "type": "module",
-  "engines": {
-    "node": ">=22.18"
-  },
   "scripts": {
     "ambiente:gerar": "node ambiente-local/gerar.ts --se-faltar",
+    "build": "node -e \"console.log('Nada a compilar: o Node executa o TypeScript direto.')\"",
+    "conferir": "pnpm conformidade:local && pnpm docs:links",
+    "conformidade:local": "node suite-de-conformidade/local.ts",
+    "docs:links": "node ferramentas/conferir-links.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "jornada": "node suite-de-conformidade/receptor-minimo/jornada.ts",
+    "lint": "eslint .",
+    "prepare": "husky",
     "servidor": "node servidor-de-exemplo/principal.ts --config ambiente-local/gerado/servidor.config.json",
     "suite": "node suite-de-conformidade/principal.ts",
-    "conformidade:local": "node suite-de-conformidade/local.ts",
-    "jornada": "node suite-de-conformidade/receptor-minimo/jornada.ts",
-    "typecheck": "tsc -p .",
     "test": "vitest run",
-    "docs:links": "node ferramentas/conferir-links.ts",
-    "verificar": "pnpm typecheck && pnpm test && pnpm conformidade:local && pnpm docs:links"
+    "typecheck": "tsc -p .",
+    "verificar": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm conferir"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "prettier --write",
+      "eslint --fix --max-warnings 0 --no-warn-ignored"
+    ],
+    "*.{js,cjs,json,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "ajv": "^8.20.0",
     "jose": "^6.2.17"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.3",
+    "@precisa-saude/agent-instructions": "3.5.1",
+    "@precisa-saude/commitlint-config": "3.5.1",
+    "@precisa-saude/eslint-config": "3.5.1",
+    "@precisa-saude/prettier-config": "3.5.1",
     "@types/node": "^22.20.5",
-    "typescript": "^7.0.2",
+    "eslint": "^10.15.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.10.1",
+    "prettier-plugin-packagejson": "^3.1.0",
+    "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   },
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.18"
+  }
 }

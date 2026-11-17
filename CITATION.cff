@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+title: 'Open Labs Brasil'
+message: 'Se você utilizar esta especificação ou estas ferramentas, por favor cite-as conforme abaixo.'
+type: software
+authors:
+  - name: 'Precisa Saúde'
+repository-code: 'https://github.com/Precisa-Saude/open-labs-brasil'
+abstract: >-
+  Protocolo aberto para que um aplicativo escolhido pelo paciente acesse, com o
+  consentimento dele, catálogo, unidades, agenda, agendamento e resultados de um
+  laboratório de análises clínicas. Rascunho, versão 0.2.2.
+license:
+  - Apache-2.0
+  - CC-BY-4.0
