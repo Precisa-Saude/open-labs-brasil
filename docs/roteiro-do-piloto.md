@@ -18,7 +18,7 @@
 | Servidor de exemplo com dados sintéticos | Registro de participantes real. O piloto usa um registro de teste, gerado na máquina de quem testa |
 | Suíte de conformidade do lado do provedor, com 132 requisitos | Ambiente de teste hospedado |
 | Receptor mínimo, que faz a jornada de ponta a ponta contra o servidor de exemplo | Suíte do lado do receptor (requisitos RCP) |
-| Perfis FHIR em FSH, no [guia de implementação](https://github.com/Precisa-Saude/fhir-brasil/tree/main/ig) | Perfis publicados nas URLs canônicas ou em registro de pacotes. Por ora, compile o guia como diz o README dele |
+| Perfis FHIR publicados nas URLs canônicas, em JSON, com [índice](https://fhir-brasil.dev.br/ig/) e [pacote](https://fhir-brasil.dev.br/ig/package.tgz) para o validador. O fonte em FSH está no [guia de implementação](https://github.com/Precisa-Saude/fhir-brasil/tree/main/ig) | Pacote do guia em registro de pacotes FHIR. Baixe o `package.tgz` do endereço ao lado |
 | Leitura da LGPD que orientou o desenho ([capítulo 1](../especificacao/01-visao-geral-e-papeis.md), seção 1.7) | Parecer jurídico e modelo de contrato entre laboratório e aplicativo |
 
 O piloto roda só em homologação, com pacientes de teste. Paciente real, só com consentimento real ([capítulo 7](../especificacao/07-perfil-de-seguranca.md), seção 7.10).
