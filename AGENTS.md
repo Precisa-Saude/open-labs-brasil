@@ -34,7 +34,8 @@ docs/                   working docs: sources, review notes, tool guide, pilot r
                         lab presentation (.md and .pdf), generated coverage table
 servidor-de-exemplo/    example provider (synthetic data, test-only control interface)
 suite-de-conformidade/  provider conformance suite, minimal receiver, end-to-end journey
-ambiente-local/         test PKI and signed local registry generator
+ambiente-local/         test PKI and signed local registry generator; `pnpm demonstracao`
+                        (example server plus hosting, for a real app to connect as receiver F)
 comum/                  CPF, registry verification (V1 to V14), version negotiation
 ferramentas/            Markdown link check, coverage table generator
 ```

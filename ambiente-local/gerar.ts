@@ -54,6 +54,8 @@ export interface OpcoesDoAmbiente {
   enderecoDeEscuta: string;
   host: string;
   hostHospedagem: string;
+  /** Nome do aplicativo de demonstração no registro, mostrado na tela de consentimento. */
+  nomeDaDemonstracao: string;
   nomesExtras: string[];
   portaControle: number;
   portaHospedagem: number;
@@ -163,9 +165,15 @@ interface DefinicaoDeReceptor {
   certificados: number;
   letra: string;
   nome: string;
-  papel: 'principal' | 'secundario' | 'sentinela' | 'suspenso' | 'retirado';
+  papel: 'principal' | 'secundario' | 'sentinela' | 'suspenso' | 'retirado' | 'demonstracao';
   situacao: Participante['status'];
 }
+
+/** Nome padrão do aplicativo de demonstração (`pnpm demonstracao`). */
+export const NOME_PADRAO_DA_DEMONSTRACAO = 'Aplicativo de demonstração';
+
+/** Caminho, na hospedagem, para onde o laboratório devolve o paciente do aplicativo de demonstração. */
+export const CAMINHO_DE_RETORNO_DA_DEMONSTRACAO = '/demonstracao/retorno';
 
 const RECEPTORES: DefinicaoDeReceptor[] = [
   {
@@ -203,7 +211,62 @@ const RECEPTORES: DefinicaoDeReceptor[] = [
     papel: 'retirado',
     situacao: 'withdrawn',
   },
+  {
+    // Fora da suíte: é o receptor que um aplicativo de verdade usa com `pnpm demonstracao`.
+    certificados: 1,
+    letra: 'f',
+    nome: NOME_PADRAO_DA_DEMONSTRACAO,
+    papel: 'demonstracao',
+    situacao: 'active',
+  },
 ];
+
+/**
+ * O que um aplicativo de verdade precisa para usar o receptor de demonstração
+ * (`pnpm demonstracao`). Caminhos absolutos, para o aplicativo ler de outro repositório.
+ */
+function escreverConfiguracaoDaDemonstracao(o: {
+  chaves: string;
+  demonstracao: { clientId: string; nome: string; redirectUri: string };
+  dir: string;
+  hospedagem: string;
+  idDoProvedor: string;
+  pki: string;
+  registroDir: string;
+}): void {
+  writeFileSync(
+    join(o.dir, 'demonstracao.json'),
+    JSON.stringify(
+      {
+        ambiente: 'pilot',
+        ca_confiavel: join(o.pki, 'ca.crt'),
+        cliente: {
+          certificado: join(o.pki, 'receptor-f-1.crt'),
+          chave_de_assinatura: join(o.chaves, 'receptor-f.privada.jwk.json'),
+          chave_do_certificado: join(o.pki, 'receptor-f-1.key'),
+          client_id: o.demonstracao.clientId,
+          nome: o.demonstracao.nome,
+          redirect_uri: o.demonstracao.redirectUri,
+        },
+        pacientes: PACIENTES.filter((p) => p.usuario === 'ana' || p.usuario === 'bruno').map(
+          (p) => ({
+            cpf: p.cpf,
+            senha: SENHA_DE_TESTE,
+            usuario: p.usuario,
+          }),
+        ),
+        provedor: { participant_id: o.idDoProvedor },
+        registro: {
+          assinatura: `${o.hospedagem}/registro/participantes.json.jws`,
+          chaves_iniciais: join(o.registroDir, 'chaves-iniciais.json'),
+          documento: `${o.hospedagem}/registro/participantes.json`,
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
 
 export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
   const dir = resolve(o.saida);
@@ -282,8 +345,15 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
   });
 
   const clientes: Record<string, unknown> = {};
+  let demonstracao: { clientId: string; nome: string; redirectUri: string } | undefined;
   for (const [i, r] of RECEPTORES.entries()) {
     const id = randomUUID();
+    const eDemonstracao = r.papel === 'demonstracao';
+    const nome = eDemonstracao ? o.nomeDaDemonstracao : r.nome;
+    const base = `${hospedagem}/receptores/${r.letra}`;
+    const retorno = eDemonstracao
+      ? `${hospedagem}${CAMINHO_DE_RETORNO_DA_DEMONSTRACAO}`
+      : `${base}/retorno`;
     const assinatura = await chaveDeAssinatura();
     const caminhoDaChave = join(chaves, `receptor-${r.letra}.privada.jwk.json`);
     writeFileSync(caminhoDaChave, JSON.stringify(assinatura.privada, null, 2));
@@ -303,20 +373,19 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
         'x5t#S256': x5tS256(new Uint8Array(cert.raw)),
       });
     }
-    const base = `${hospedagem}/receptores/${r.letra}`;
     participantes.push({
       cnpj: completarCnpj(`99999993000${i + 1}`),
       contacts: {
         security_email: `seguranca@receptor-${r.letra}.example`,
         technical_email: `integracao@receptor-${r.letra}.example`,
       },
-      display_name: r.nome,
-      legal_name: `${r.nome} Tecnologia Ltda. (fictício)`,
+      display_name: nome,
+      legal_name: `${nome} Tecnologia Ltda. (fictício)`,
       participant_id: id,
       protocol_versions: ['0.2'],
       receiver: {
         client_id: id,
-        client_name: r.nome,
+        client_name: nome,
         eligibility: {
           declared_at: agora.toISOString().slice(0, 10),
           health_plan_operator: false,
@@ -324,7 +393,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
         },
         jwks_uri: `${base}/jwks.json`,
         policy_uri: `${base}/privacidade`,
-        redirect_uris: [`${base}/retorno`],
+        redirect_uris: [retorno],
         scopes_allowed: [...TODOS_OS_ESCOPOS],
         tos_uri: `${base}/termos`,
         transport_certificates: certificados,
@@ -333,6 +402,10 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
       status: r.situacao,
       updated_at: instante(agora),
     });
+    if (eDemonstracao) {
+      demonstracao = { clientId: id, nome, redirectUri: retorno };
+      continue;
+    }
     clientes[r.papel] = {
       certificados: Array.from({ length: r.certificados }, (_, k) => ({
         certificado: `pki/receptor-${r.letra}-${k + 1}.crt`,
@@ -484,6 +557,15 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
       2,
     ),
   );
+  escreverConfiguracaoDaDemonstracao({
+    chaves,
+    demonstracao: demonstracao!,
+    dir,
+    hospedagem,
+    idDoProvedor,
+    pki,
+    registroDir,
+  });
   writeFileSync(
     join(dir, 'LEIA-ME.txt'),
     [
@@ -514,6 +596,7 @@ export function opcoesDaLinhaDeComando(
       forcar: { default: false, type: 'boolean' },
       host: { default: 'localhost', type: 'string' },
       'host-hospedagem': { default: 'localhost', type: 'string' },
+      'nome-da-demonstracao': { default: NOME_PADRAO_DA_DEMONSTRACAO, type: 'string' },
       'nome-extra': { default: [], multiple: true, type: 'string' },
       'porta-controle': { default: '8445', type: 'string' },
       'porta-hospedagem': { default: '9443', type: 'string' },
@@ -528,6 +611,7 @@ export function opcoesDaLinhaDeComando(
     forcar: values.forcar!,
     host: values.host!,
     hostHospedagem: values['host-hospedagem']!,
+    nomeDaDemonstracao: values['nome-da-demonstracao']!,
     nomesExtras: values['nome-extra']!,
     portaControle: Number(values['porta-controle']),
     portaHospedagem: Number(values['porta-hospedagem']),

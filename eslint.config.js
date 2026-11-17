@@ -24,6 +24,7 @@ export default [
     // Programas de linha de comando e o log do servidor de exemplo: a saída no
     // terminal é o produto deles.
     files: [
+      'ambiente-local/demonstracao.ts',
       'ambiente-local/gerar.ts',
       'ferramentas/*.ts',
       'servidor-de-exemplo/principal.ts',

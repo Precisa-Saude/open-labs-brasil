@@ -2,6 +2,8 @@
 // receptores de teste (publica o jwks_uri de cada um) e do mantenedor do
 // registro (publica participantes.json e a assinatura, que a suíte troca para
 // testar a verificação do provedor). Guarda as requisições recebidas (REG-004).
+// Na demonstração (`pnpm demonstracao`), também faz a página de retorno do
+// aplicativo, que repassa o navegador ao backend dele.
 
 import { readFileSync } from 'node:fs';
 import https from 'node:https';
@@ -14,6 +16,7 @@ export interface RequisicaoRecebida {
 export class Hospedagem {
   readonly arquivos = new Map<string, { tipo: string; conteudo: Buffer }>();
   readonly recebidas: RequisicaoRecebida[] = [];
+  readonly redirecionamentos = new Map<string, string>();
   private servidor: https.Server | undefined;
 
   publicar(caminho: string, conteudo: Buffer | string, tipo = 'application/json'): void {
@@ -21,6 +24,11 @@ export class Hospedagem {
       conteudo: Buffer.isBuffer(conteudo) ? conteudo : Buffer.from(conteudo),
       tipo,
     });
+  }
+
+  /** Responde 303 para `destino`, com a consulta da requisição sem alteração. */
+  redirecionar(caminho: string, destino: string): void {
+    this.redirecionamentos.set(caminho, destino);
   }
 
   async iniciar(o: {
@@ -32,8 +40,15 @@ export class Hospedagem {
     this.servidor = https.createServer(
       { cert: readFileSync(o.certificado), key: readFileSync(o.chave), minVersion: 'TLSv1.2' },
       (req, res) => {
-        const caminho = new URL(req.url ?? '/', 'https://hospedagem').pathname;
+        const url = new URL(req.url ?? '/', 'https://hospedagem');
+        const caminho = url.pathname;
         this.recebidas.push({ caminho, em: Date.now() });
+        const destino = this.redirecionamentos.get(caminho);
+        if (req.method === 'GET' && destino) {
+          res.writeHead(303, { 'Cache-Control': 'no-store', Location: `${destino}${url.search}` });
+          res.end();
+          return;
+        }
         const arquivo = this.arquivos.get(caminho);
         if (req.method !== 'GET' || !arquivo) {
           res.writeHead(404);
