@@ -1,6 +1,6 @@
 # Open Labs Brasil para equipes de engenharia e de segurança de laboratórios
 
-2026-11-17, especificação 0.2.1. Rótulos como [OFB-CONSENT] remetem a [FONTES.md](FONTES.md).
+2026-11-17, especificação 0.2.2. Rótulos como [OFB-CONSENT] remetem a [FONTES.md](FONTES.md).
 
 O Open Labs Brasil é um protocolo para que um aplicativo escolhido pelo paciente acesse, com o consentimento dele, catálogo, unidades, agenda, agendamento e resultados de um laboratório de análises clínicas. No vocabulário do Open Finance Brasil, o laboratório é a transmissora e o aplicativo, a receptora, que cria o consentimento como recurso para o titular autorizar na transmissora [OFB-CONSENT]. O perfil de segurança é o FAPI 2.0 Security Profile [FAPI2-SP], e os dados são recursos FHIR R4.
 
@@ -78,7 +78,7 @@ Resultado de exame é dado pessoal sensível (art. 5º, II, da LGPD) [LGPD]. O d
 
 ## Situação e como avaliar
 
-- **Especificação.** Rascunho, fase de piloto. A 0.2.1 está no ramo principal, e a 0.2.2, que esclarece pontos levantados pelo primeiro cliente receptor, está em revisão. Nada foi testado contra um laboratório real, e versões 0.x podem quebrar a anterior ([CHANGELOG.md](../CHANGELOG.md)).
-- **Servidor de exemplo e suíte de conformidade.** Em construção, fora do ramo principal: um laboratório simulado com dados sintéticos e uma suíte que testa os requisitos de provedor do [capítulo 9](../especificacao/09-versionamento-e-conformidade.md) contra qualquer endpoint. Por ora, conformidade é autodeclarada.
+- **Especificação.** Rascunho, fase de piloto. A versão no ramo principal é a 0.2.2, que esclarece pontos levantados pelo primeiro cliente receptor. Nada foi testado contra um laboratório real, e versões 0.x podem quebrar a anterior ([CHANGELOG.md](../CHANGELOG.md)).
+- **Servidor de exemplo e suíte de conformidade.** No ramo principal: um laboratório simulado com dados sintéticos e uma suíte que testa os requisitos de provedor do [capítulo 9](../especificacao/09-versionamento-e-conformidade.md) contra qualquer endpoint. Contra ele, 128 dos 132 requisitos passam; 4 pedem conferência humana. Por ora, conformidade é autodeclarada.
 - **Retorno.** Issue no repositório, privado durante o piloto. Ajuda saber se a terminação TLS repassa o certificado do cliente à aplicação, se todo paciente tem CPF, se o portal já faz PAR e PKCE e se há LOINC nos resultados. Falhas de segurança vão em privado, a um contato ainda não publicado.
 - **Governança.** Hoje decide o mantenedor, a Precisa Saúde. Com dois laboratórios e dois aplicativos ativos e independentes, um comitê assume automaticamente e decide por maioria de cada lado, contada em separado. O controle pode depois passar a uma entidade de padronização, nas condições da seção 7.2 do [GOVERNANCE.md](../GOVERNANCE.md). Implementar não exige licença nem taxa (texto CC BY 4.0, código Apache 2.0).
