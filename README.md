@@ -44,6 +44,8 @@ docs/
   servidor-e-suite.md   como rodar o servidor de exemplo e a suíte de conformidade
   cobertura-de-requisitos.md  requisito, teste e situação, gerado pela suíte
   pontos-da-especificacao.md  ambiguidades encontradas na implementação
+  apresentacao-para-laboratorios.md (e .pdf)
+                        duas páginas para engenharia e segurança de laboratórios
 servidor-de-exemplo/    provedor de dados simulado, com dados sintéticos (código)
 suite-de-conformidade/  suíte de conformidade do provedor e receptor mínimo (código)
 ambiente-local/         PKI de teste e registro local assinado (código)
