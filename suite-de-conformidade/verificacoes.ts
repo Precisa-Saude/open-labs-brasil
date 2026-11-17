@@ -57,6 +57,10 @@ export function entradas(bundle: Json, modo = 'match'): Entrada[] {
     bundle.resourceType === 'Bundle' && bundle.type === 'searchset',
     'a busca não devolveu Bundle searchset',
   );
+  esperar(
+    !Array.isArray(bundle.entry) || bundle.entry.length > 0,
+    'Bundle com entry vazio: o FHIR JSON não admite lista vazia, e a busca sem resultado vai sem entry',
+  );
   return ((bundle.entry as Entrada[] | undefined) ?? []).filter(
     (e) => (e.search?.mode ?? 'match') === modo,
   );

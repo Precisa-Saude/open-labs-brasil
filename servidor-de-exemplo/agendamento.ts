@@ -434,6 +434,11 @@ function conferirHorario(
       { diagnostico: `Slot/${v.slotId} não está livre.` },
     );
   }
+  if (Date.parse(String(slot.recurso.start)) <= provedor.relogio.agoraMs()) {
+    throw new ErroDeApi(409, 'SLOT_UNAVAILABLE', 'conflict', 'O horário escolhido já começou.', {
+      diagnostico: `Slot/${v.slotId} já começou.`,
+    });
+  }
   const tipos =
     (slot.recurso.serviceType as Array<{ coding: Array<{ system: string; code: string }> }>) ?? [];
   const naUnidade = provedor.dados.examesPorUnidade.get(v.unidadeId) ?? [];
@@ -459,6 +464,56 @@ function conferirHorario(
   return slot;
 }
 
+const eObjeto = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
+const textoOuAusente = (v: unknown) => v === undefined || typeof v === 'string';
+
+function referenciaBemFormada(v: unknown): boolean {
+  if (!eObjeto(v) || !textoOuAusente(v.reference) || !textoOuAusente(v.type)) return false;
+  if (v.identifier === undefined) return true;
+  return (
+    eObjeto(v.identifier) &&
+    textoOuAusente(v.identifier.system) &&
+    textoOuAusente(v.identifier.value)
+  );
+}
+
+/**
+ * Tipos JSON dos elementos que a validação percorre. Tipo errado é 400 INVALID_REQUEST (seção 6.3.2),
+ * antes das regras do perfil, que respondem 422.
+ */
+function conferirTipos(corpo: Json): void {
+  const tipoErrado = (expressao: string) =>
+    new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', `Tipo JSON errado em ${expressao}.`, {
+      expressao: [expressao],
+    });
+  const lista = (campo: string, item: (v: unknown) => boolean): void => {
+    const v = corpo[campo];
+    if (v !== undefined && (!Array.isArray(v) || !v.every(item)))
+      throw tipoErrado(`Appointment.${campo}`);
+  };
+  lista('identifier', eObjeto);
+  lista('extension', eObjeto);
+  lista('basedOn', referenciaBemFormada);
+  lista('slot', referenciaBemFormada);
+  lista(
+    'participant',
+    (p) => eObjeto(p) && (p.actor === undefined || referenciaBemFormada(p.actor)),
+  );
+  lista('contained', (sr) => {
+    if (!eObjeto(sr)) return false;
+    if (sr.subject !== undefined && !referenciaBemFormada(sr.subject)) return false;
+    if (sr.meta !== undefined && !eObjeto(sr.meta)) return false;
+    if (sr.code === undefined) return true;
+    if (!eObjeto(sr.code)) return false;
+    const coding = sr.code.coding;
+    return (
+      coding === undefined ||
+      (Array.isArray(coding) &&
+        coding.every((c) => eObjeto(c) && textoOuAusente(c.system) && textoOuAusente(c.code)))
+    );
+  });
+}
+
 function lerJson(bruto: Buffer): Json {
   let corpo: unknown;
   try {
@@ -479,6 +534,7 @@ function lerJson(bruto: Buffer): Json {
       'O corpo precisa ser um recurso Appointment.',
     );
   }
+  conferirTipos(corpo as Json);
   return corpo as Json;
 }
 

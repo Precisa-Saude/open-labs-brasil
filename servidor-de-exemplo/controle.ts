@@ -17,7 +17,7 @@ import {
 } from './autorizacao.ts';
 import { instante } from './configuracao.ts';
 import { PACIENTES } from './dados.ts';
-import { enviarJson, lerCorpo } from './http.ts';
+import { enviarJson, lerCorpo, urlDaRequisicao } from './http.ts';
 import type { Provedor } from './provedor.ts';
 
 function autorizado(provedor: Provedor, req: IncomingMessage): boolean {
@@ -37,7 +37,8 @@ export async function tratarControle(
 ): Promise<void> {
   if (!autorizado(provedor, req))
     return enviarJson(res, 401, { erro: 'token de controle ausente ou inválido' });
-  const url = new URL(req.url ?? '/', 'http://controle');
+  const url = urlDaRequisicao(req, 'http://controle');
+  if (!url) return enviarJson(res, 400, { erro: 'o alvo da requisição precisa ser um caminho' });
   let corpo: Record<string, unknown> = {};
   if (req.method === 'POST') {
     const bruto = await lerCorpo(req);

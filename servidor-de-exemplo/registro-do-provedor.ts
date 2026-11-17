@@ -38,6 +38,7 @@ export class RegistroDoProvedor {
   ultimaBuscaMs: number;
   aoAceitar: (anterior: DocumentoDoRegistro, novo: DocumentoDoRegistro) => void = () => {};
   aoAvisar: (mensagem: string) => void = () => {};
+  private fila: Promise<unknown> = Promise.resolve();
 
   private constructor(cfg: ConfiguracaoDoServidor, relogio: Relogio, atual: DocumentoAceito) {
     this.cfg = cfg;
@@ -72,8 +73,18 @@ export class RegistroDoProvedor {
     return this.atual.documento;
   }
 
-  /** Busca o candidato (V1) e aplica V2 a V14. Mantém o documento atual se o candidato for recusado. */
-  async recarregar(): Promise<ResultadoDaRecarga> {
+  /**
+   * Busca o candidato (V1) e aplica V2 a V14. Mantém o documento atual se o candidato for recusado.
+   * Uma recarga de cada vez: duas em paralelo verificariam contra o mesmo documento N, e a mais lenta
+   * poderia pôr em vigor uma sequence menor que a aceita pela outra.
+   */
+  recarregar(): Promise<ResultadoDaRecarga> {
+    const vez = this.fila.then(() => this.recarregarAgora());
+    this.fila = vez.catch(() => undefined);
+    return vez;
+  }
+
+  private async recarregarAgora(): Promise<ResultadoDaRecarga> {
     this.ultimaBuscaMs = this.relogio.agoraMs();
     let bytes: Uint8Array;
     let jws: string;

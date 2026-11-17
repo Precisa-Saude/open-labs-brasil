@@ -47,6 +47,10 @@ export const VIOLACOES = {
     requisitos: ['AGD-013'],
   },
   'aud-em-lista': { descricao: 'Asserção aceita com aud em lista', requisitos: ['AUT-009'] },
+  'bundle-com-entry-vazio': {
+    descricao: 'Busca sem resultado devolvida com entry vazio',
+    requisitos: ['CAT-001', 'RES-001'],
+  },
   'busca-por-cidade-ignorada': {
     descricao: 'Parâmetro address-city ignorado',
     requisitos: ['UNI-001'],
