@@ -93,13 +93,14 @@ Não há linter configurado: a verificação estática é o `tsc` em modo estrit
 
 ## Situação
 
-Atualizada no fim do trabalho, com a evidência de cada critério.
+Atualizada em 2026-11-16, no fim do trabalho, com a evidência de cada critério.
 
 | Critério | Situação | Evidência |
 | --- | --- | --- |
-| 1. Servidor de exemplo | Pendente | |
-| 2. PKI e registro local | Pendente | |
-| 3. Imagem de contêiner | Pendente | |
-| 4. Suíte de conformidade | Pendente | |
-| 5. Jornada de ponta a ponta | Pendente | |
-| 6. Documentação | Pendente | |
+| 1. Servidor de exemplo | Cumprido | `pnpm conformidade:local`: 120 aprovados, 0 reprovados, 4 não verificáveis automaticamente (AUT-024, CNS-008, CNS-023, API-008). `servidor-de-exemplo/servidor.test.ts` confere as páginas de login, consentimento e compartilhamentos e os dados sintéticos contra as cardinalidades dos perfis |
+| 2. PKI e registro local | Cumprido | `node ambiente-local/gerar.ts --forcar` termina com "verificação V2 V3 ... V14 aprovada"; `ambiente-local/registro-local.test.ts` baixa o registro por HTTPS (V1) e aprova V1 a V14 |
+| 3. Imagem de contêiner | Não construída | O Docker não está instalado nesta máquina. O conjunto de arquivos da imagem foi reproduzido numa pasta temporária (mesmos `COPY`, `pnpm install --prod --frozen-lockfile`) e o servidor subiu dali e respondeu os metadados. Falta `docker build` |
+| 4. Suíte de conformidade | Cumprido | `pnpm conformidade:local` como acima, em cerca de 10 segundos; `suite-de-conformidade/testes/conformidade.test.ts` confere que os 124 requisitos de provedor em vigor têm teste; `violacoes.test.ts`: 98 violações, cada uma reprova o requisito que viola. Também roda com servidor e suíte em processos separados, duas vezes seguidas contra o mesmo servidor, e sem interface de controle (54 aprovados, 0 reprovados, 70 não verificáveis) |
+| 5. Jornada de ponta a ponta | Cumprido | `pnpm jornada`: 11 passos, de registro verificado até revogação com `PATIENT_MISMATCH`; `suite-de-conformidade/testes/jornada.test.ts` |
+| 6. Documentação | Cumprido | [servidor-e-suite.md](servidor-e-suite.md), [cobertura-de-requisitos.md](cobertura-de-requisitos.md), [pontos-da-especificacao.md](pontos-da-especificacao.md); `pnpm docs:links`: 107 links relativos, todos resolvem |
+| Verificações gerais | Cumprido | `pnpm verificar` (tipos, 115 testes, suíte local, links) termina com código 0. Suíte e jornada também passam no Node 22.23 |

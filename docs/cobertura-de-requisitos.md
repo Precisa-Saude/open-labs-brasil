@@ -2,7 +2,7 @@
 
 Gerado por `node ferramentas/gerar-cobertura.ts` a partir de [09-versionamento-e-conformidade.md](../especificacao/09-versionamento-e-conformidade.md), da lista de testes da suíte e do relatório de `pnpm conformidade:local`. Não edite à mão: rode os dois comandos de novo.
 
-Relatório usado: 2026-11-16T23:59:58.050Z. Contra o servidor de exemplo: 120 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 124 requisitos de provedor.
+Relatório usado: 2026-11-17T00:39:18.724Z. Contra o servidor de exemplo: 120 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 124 requisitos de provedor.
 
 Colunas:
 
@@ -66,7 +66,7 @@ Colunas:
 | CNS-005 | Recusa criação com identificação de paciente ou outro campo desconhecido no corpo | `consentimento.ts` | aprovado | `consentimento-aceita-campo-desconhecido` |
 | CNS-006 | Passa a `REJECTED` com `AUTHORISATION_TIMEOUT` 60 minutos depois da criação sem aprovação | `consentimento.ts`, fase relogio | aprovado | `consentimento-sem-prazo-de-autorizacao` |
 | CNS-007 | Recusa PAR cujo `consent:{id}` aponta para consentimento inexistente, de outro cliente ou fora de `AWAITING_AUTHORISATION` | `consentimento.ts` | aprovado | `par-aceita-consentimento-de-outro` |
-| CNS-008 | A tela de consentimento mostra o nome do receptor do registro, os escopos, a finalidade enviada e a data de expiração, e informa que o CPF será confirmado ao aplicativo | `consentimento.ts` | não verificável automaticamente: o conteúdo da tela de consentimento depende de inspeção humana (seção 9.3); o servidor de exemplo é conferido nos testes dele |  |
+| CNS-008 | A tela de consentimento mostra o nome do receptor do registro, os escopos, a finalidade enviada e a data de expiração, e informa que o CPF será confirmado ao aplicativo | `consentimento.ts` | não verificável automaticamente: escopos em linguagem comum, data de expiração e aviso de confirmação do CPF admitem redação do provedor e pedem inspeção humana |  |
 | CNS-009 | Recusa pelo paciente devolve `access_denied` e o consentimento passa a `REJECTED` com `PATIENT_REJECTED` | `consentimento.ts` | aprovado |  |
 | CNS-010 | Aprovação passa o consentimento a `AUTHORISED` | `consentimento.ts` | aprovado |  |
 | CNS-011 | Paciente sem CPF no cadastro: `access_denied` e `REJECTED` com `PATIENT_WITHOUT_CPF` | `consentimento.ts` | aprovado |  |

@@ -158,7 +158,9 @@ Os requisitos de provedor do capítulo 9 (prefixos REG, SEG, AUT, CNS, API, CAT,
 | `reprovado` | Alguma conferência falhou. O motivo diz qual, com a resposta do provedor |
 | `não verificável automaticamente` | O requisito, ou parte dele, pede inspeção humana, o validador FHIR, ou um recurso que a configuração não tem (por exemplo a interface de controle). O motivo diz qual. Se uma parte verificável falha, o resultado é `reprovado` |
 
-Contra o servidor de exemplo, quatro ficam como não verificáveis: AUT-024, CNS-008 e CNS-023, que o capítulo 9 diz dependerem de olhar telas, e API-008, porque a validação completa contra os perfis pede o validador FHIR com o guia. A suíte confere o que dá para conferir nesses quatro (`meta.profile` e as cardinalidades mínimas de cada perfil, a origem da página de login, a resposta da página de consentimentos) e reprova se algo disso falha.
+Contra o servidor de exemplo, quatro ficam como não verificáveis: AUT-024, CNS-008 e CNS-023, que o capítulo 9 diz dependerem de olhar telas, e API-008, porque a validação completa contra os perfis pede o validador FHIR com o guia. A suíte confere o que dá para conferir nesses quatro (`meta.profile` e as cardinalidades mínimas de cada perfil; que login e consentimento ficam no domínio do provedor; que a tela de consentimento mostra o nome do receptor como está no registro e a finalidade sem alteração; que a página de consentimentos responde) e reprova se algo disso falha. Os textos dos escopos, a data de expiração e o aviso do CPF admitem redação do provedor e ficam para inspeção.
+
+Algumas conferências aceitam mais de uma resposta conforme: um token recusado depois de revogação ou expiração pode vir com `CONSENT_REVOKED`, `CONSENT_EXPIRED` ou `TOKEN_INVALID`, sempre com 401 e `invalid_token`; o relógio é adiantado dentro da validade do token, para que a recusa venha do consentimento e não do token vencido. SEG-002 oferece, uma de cada vez, todas as suítes TLS 1.2 que o OpenSSL do Node conhece, menos as quatro da seção 7.5, e só conta as que o cliente consegue oferecer.
 
 Os requisitos do receptor (RCP) ficam fora: testá-los pede um provedor de teste controlado pela suíte.
 
@@ -170,7 +172,8 @@ A suíte faz o papel de receptores de teste registrados. Num ambiente de homolog
 2. **Clientes de teste** com chave de assinatura PS256 e certificado TLS no registro: o principal com dois certificados, o secundário, o sentinela, um `suspended` e um `withdrawn`. Só o principal é obrigatório: os testes que dependem dos outros terminam não verificáveis sem eles.
 3. **O `jwks_uri` dos clientes acessível ao provedor.** A suíte pode hospedá-lo (bloco `hospedagem`), ou o laboratório publica os arquivos onde preferir.
 4. **Pacientes de teste** no sistema do laboratório: um principal com CPF, outro com CPF diferente e um sem CPF, e os identificadores de alguns laudos.
-5. **Opcional, mas recomendado: a interface de controle de teste** descrita acima. Sem ela, todos os testes que precisam concluir a jornada do paciente, adiantar o relógio ou recarregar o registro terminam não verificáveis.
+5. **Opcional, mas recomendado: a interface de controle de teste** descrita acima. Sem ela, todos os testes que precisam adiantar o relógio ou recarregar o registro terminam não verificáveis.
+6. **Para concluir a jornada do paciente**, uma de duas: login e consentimento em formulários HTML simples (`jornada_por_formulario`), que a suíte percorre como um navegador, ou a operação `jornada` da interface de controle. Com a interface de controle, os testes que olham o redirecionamento (AUT-012, AUT-013, AUT-025, ERR-006) dizem que ele foi informado pelo provedor, e não observado, e terminam não verificáveis. Sem nenhuma das duas, cerca de metade dos requisitos fica não verificável.
 
 Para os testes do registro (REG), a suíte publica candidatos assinados na hospedagem e o provedor precisa buscá-los ali (`registro.caminho_de_publicacao`). Ela precisa também da chave privada do registro de teste (`registro.chave_privada_para_candidatos`). Isso só faz sentido com um registro de teste, nunca com o registro real.
 
@@ -191,7 +194,7 @@ O arquivo gerado em `ambiente-local/gerado/suite.config.json` é um exemplo comp
 | `clientes.principal` | Sim | `client_id`, `chave_de_assinatura` (JWK privado), `jwks_publico`, `certificados` (lista de `certificado` e `chave` em PEM) |
 | `clientes.secundario`, `sentinela`, `suspenso`, `retirado` | Não | Mesmo formato |
 | `certificado_nao_registrado` | Não | Certificado de cliente válido fora do registro (SEG-004) |
-| `pacientes.principal` | Sim | `usuario`, `senha`, `cpf`, `fhir_id`, e opcionalmente `laudos_nao_liberados`, `laudo_antigo` (`id`, `data`), `laudo_para_retificar`, `agendamento_de_outro_canal` |
+| `pacientes.principal` | Sim | `usuario`, `senha` (usada só pela jornada por formulário, dentro do domínio do provedor), `cpf`, `fhir_id`, e opcionalmente `laudos_nao_liberados`, `laudo_antigo` (`id`, `data`), `laudo_para_retificar`, `agendamento_de_outro_canal` |
 | `pacientes.outro`, `pacientes.sem_cpf` | Não | `usuario`, `senha`, `cpf`, `fhir_id` |
 | `agenda.unidade` | Não | Unidade dos testes de agenda e agendamento, `Location/{id}` |
 | `agenda.exame_comum`, `agenda.exame_restrito` | Não | `sistema\|código` de um exame comum e de um que só cabe em parte dos horários (AGE-005) |
@@ -199,6 +202,7 @@ O arquivo gerado em `ambiente-local/gerado/suite.config.json` é um exemplo comp
 | `agenda.prazo_de_pagamento_minutos` | Não | Prazo do provedor para o pagamento (AGD-008). Sem ele, o relógio é adiantado 24 horas |
 | `catalogo.item_para_retirar` | Não | `ActivityDefinition` que a interface de controle pode retirar (CAT-003) |
 | `controle_de_teste` | Não | `url` e `token` da interface de controle |
+| `jornada_por_formulario` | Não | `campo_usuario`, `campo_senha`, `campo_decisao`, `valor_aprovar`, `valor_recusar`. Quando a página de login e a tela de consentimento do provedor são formulários HTML simples, a suíte conclui a jornada por elas, como um navegador, e registra cada redirecionamento. Tem precedência sobre a interface de controle para a jornada |
 
 ### Efeitos colaterais
 
