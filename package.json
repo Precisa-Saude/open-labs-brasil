@@ -10,6 +10,7 @@
     "build": "node -e \"console.log('Nada a compilar: o Node executa o TypeScript direto.')\"",
     "conferir": "pnpm conformidade:local && pnpm docs:links",
     "conformidade:local": "node suite-de-conformidade/local.ts",
+    "demonstracao": "node ambiente-local/demonstracao.ts",
     "docs:links": "node ferramentas/conferir-links.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

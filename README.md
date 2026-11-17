@@ -82,6 +82,7 @@ O servidor de exemplo implementa o lado do provedor da especificação 0.2.2, co
 pnpm install
 pnpm conformidade:local   # servidor de exemplo e suíte, em um comando
 pnpm jornada              # jornada de ponta a ponta com um receptor mínimo
+pnpm demonstracao         # laboratório simulado para um aplicativo de verdade se conectar
 pnpm test
 ```
 

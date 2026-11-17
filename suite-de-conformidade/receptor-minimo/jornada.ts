@@ -28,7 +28,7 @@ const real = (v: number | undefined) =>
   v === undefined ? 'sem preço' : `R$ ${v.toFixed(2).replace('.', ',')}`;
 
 /** Navegador mínimo: GET e POST de formulário, sem certificado de cliente, sem seguir redirecionamento. */
-class Navegador {
+export class Navegador {
   readonly ca: string;
   constructor(ca: string) {
     this.ca = ca;
@@ -82,7 +82,7 @@ function formulario(html: string, base: string): { acao: string; campos: Record<
 }
 
 /** O paciente entra na página do laboratório e decide. Devolve o endereço de retorno ao aplicativo. */
-async function pacienteNoNavegador(
+export async function pacienteNoNavegador(
   nav: Navegador,
   url: string,
   usuario: string,

@@ -33,6 +33,7 @@ Outros comandos:
 | --- | --- |
 | `pnpm ambiente:gerar` | Gera o ambiente local em `ambiente-local/gerado/`, se ainda não existir ou se o registro estiver perto de vencer |
 | `pnpm servidor` | Sobe o servidor de exemplo com a configuração do ambiente local |
+| `pnpm demonstracao` | Sobe o servidor de exemplo e a hospedagem, para um aplicativo de verdade se conectar (seção "Demonstração com um aplicativo de verdade") |
 | `pnpm suite --config <arquivo>` | Roda a suíte contra o provedor da configuração. `--somente AUT-001,CNS-002` filtra, `--relatorio arquivo.json` grava o resultado |
 | `pnpm typecheck` | Confere os tipos com o TypeScript em modo estrito |
 | `pnpm docs:links` | Confere que todo link relativo dos arquivos Markdown resolve |
@@ -57,8 +58,9 @@ Outros comandos:
 | `registro/participantes.json`, `.jws` | Registro `pilot` assinado com JWS destacado (seção 8.3) |
 | `registro/chaves-iniciais.json` | Conjunto inicial de chaves do registro |
 | `servidor.config.json`, `suite.config.json` | Configurações do servidor e da suíte |
+| `demonstracao.json` | O que um aplicativo de verdade precisa para usar o receptor F (`pnpm demonstracao`), com caminhos absolutos |
 
-O registro tem um provedor e cinco receptores de teste:
+O registro tem um provedor e seis receptores:
 
 | Receptor | Situação | Uso na suíte |
 | --- | --- | --- |
@@ -67,6 +69,7 @@ O registro tem um provedor e cinco receptores de teste:
 | C, sentinela | `active` | Observar se o provedor aceitou um candidato do registro (REG) |
 | D | `suspended` | AUT-023 |
 | E | `withdrawn` | AUT-023 |
+| F, demonstração | `active` | Nenhum: é o receptor de `pnpm demonstracao`. O retorno dele é `https://localhost:9443/demonstracao/retorno`, na hospedagem |
 
 O gerador confere V2 a V14 sobre o registro que acabou de escrever. O teste `ambiente-local/registro-local.test.ts` faz a verificação completa, com V1 por HTTPS e o certificado do servidor validado contra a AC de teste.
 
@@ -131,14 +134,14 @@ Todas as chamadas levam `Authorization: Bearer {token}` (o `controle.token` da c
 
 ### Modo de violações
 
-`servidor-de-exemplo/violacoes.ts` lista 110 regras que o servidor pode quebrar de propósito, cada uma com os requisitos que ela viola. `node servidor-de-exemplo/principal.ts --listar-violacoes` mostra a lista, e `pnpm servidor -- --violacao par-sem-pkce` sobe o servidor com uma delas. O teste `suite-de-conformidade/testes/violacoes.test.ts` sobe o servidor com uma violação de cada vez e exige que a suíte reprove o requisito correspondente. É o que prova que a suíte não aprova qualquer coisa.
+`servidor-de-exemplo/violacoes.ts` lista 110 regras que o servidor pode quebrar de propósito, cada uma com os requisitos que ela viola. `node servidor-de-exemplo/principal.ts --listar-violacoes` mostra a lista, e `pnpm servidor --violacao par-sem-pkce` sobe o servidor com uma delas. O teste `suite-de-conformidade/testes/violacoes.test.ts` sobe o servidor com uma violação de cada vez e exige que a suíte reprove o requisito correspondente. É o que prova que a suíte não aprova qualquer coisa.
 
 ### Contêiner
 
 O `Dockerfile` da raiz constrói uma imagem só com o servidor de exemplo. O ambiente é gerado fora da imagem e montado em `/ambiente`. A imagem não é publicada em nenhum registro de imagens.
 
 ```sh
-pnpm ambiente:gerar -- --forcar --endereco-de-escuta 0.0.0.0 \
+pnpm ambiente:gerar --forcar --endereco-de-escuta 0.0.0.0 \
   --host-hospedagem host.docker.internal --nome-extra host.docker.internal
 docker build -t open-labs-brasil/servidor-de-exemplo .
 docker run --rm -p 8443:8443 -p 8444:8444 -p 8445:8445 \
@@ -216,6 +219,28 @@ A suíte cria consentimentos, agendamentos e revogações no provedor. Com a int
 ### Ordem de execução
 
 Primeiro os testes comuns, depois os que publicam candidatos do registro, depois os que adiantam o relógio (REG-008 por último, porque leva o registro à expiração), e por fim os que examinam o histórico de todas as trocas: API-001 (`x-fapi-interaction-id` em toda resposta), API-010 (`OperationOutcome` em todo erro), ERR-001 (só códigos OAuth da seção 6.2) e ERR-004 (nenhum CPF, token ou rastro de pilha em erro).
+
+## Demonstração com um aplicativo de verdade
+
+`pnpm servidor` sozinho não atende aplicativo nenhum: o servidor busca o `jwks_uri` dos receptores e o registro na hospedagem, que só sobe junto com a suíte ou a jornada. `pnpm demonstracao` sobe os dois juntos, para que o backend de um aplicativo real (por exemplo, um que use o pacote `@precisa-saude/fhir-lab-access`) se conecte ao laboratório simulado como o receptor F.
+
+```sh
+pnpm demonstracao --nome "Nome do aplicativo" \
+  --retorno-para http://localhost:3000/api/lab-access/retorno
+```
+
+| Opção | Padrão | Para que serve |
+| --- | --- | --- |
+| `--nome` | `Aplicativo de demonstração` | Nome do receptor F no registro, que a tela de consentimento mostra. Se mudar, o ambiente local é gerado de novo |
+| `--retorno-para` | `http://localhost:3000/api/lab-access/retorno` | Endereço do backend do aplicativo |
+
+O `redirect_uri` do receptor F precisa ser `https`, e um backend local costuma rodar em `http`. Por isso o retorno registrado é uma página da hospedagem, `https://localhost:9443/demonstracao/retorno`, que responde 303 para `--retorno-para` com a consulta (`code`, `state`, `iss`) sem alteração. É o papel da página de retorno de um aplicativo publicado, que entrega a resposta ao próprio backend. O código continua passando só pelo navegador do paciente. O backend monta a URL de retorno com o `redirect_uri` registrado e a consulta que recebeu, porque o cliente confere que a resposta chegou no `redirect_uri` da jornada: o `@precisa-saude/fhir-lab-access` 3.3.0 recusa a resposta com `AuthorizationResponseError` quando recebe a URL do backend.
+
+O aplicativo lê tudo de `ambiente-local/gerado/demonstracao.json`: `client_id`, chave de assinatura (JWK privado), certificado e chave TLS do cliente, AC de teste, endereços do registro e da assinatura, chaves iniciais do registro e o `participant_id` do laboratório. O arquivo também lista os pacientes de teste. Para a conferência do titular dar certo, o CPF do usuário no aplicativo precisa ser o do paciente que entra na página do laboratório (Ana, 529.982.247-25); com o Bruno, dá `PATIENT_MISMATCH`.
+
+O navegador precisa confiar na AC de teste (`ambiente-local/gerado/pki/ca.crt`) para abrir as páginas do laboratório sem aviso. Tudo aqui é só para uso local.
+
+`ambiente-local/demonstracao.test.ts` confere o caminho inteiro com o receptor mínimo, que lê só `demonstracao.json`: registro por HTTPS e V1 a V14, autenticação do cliente com o `jwks_uri` na hospedagem, login e aprovação na página do laboratório, a página de retorno repassando a consulta intacta, troca do código e leitura dos laudos.
 
 ## Receptor mínimo e jornada de ponta a ponta
 
