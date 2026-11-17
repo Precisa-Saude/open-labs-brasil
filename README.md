@@ -11,7 +11,8 @@ A regra que organiza todo o desenho: **a senha do paciente no laboratório nunca
 - Nada foi implementado nem testado contra um laboratório real. Há um servidor de exemplo, com dados sintéticos, e uma suíte de conformidade (seção "Ferramentas").
 - Enquanto a versão começar com 0, qualquer mudança pode quebrar a anterior.
 - Os perfis FHIR referenciados ficam em outro repositório, o do guia de implementação, e ainda podem mudar.
-- Este repositório é privado durante o piloto. A abertura é condição para a versão 1.0.0.
+- O repositório é público. Dúvidas e resultados de teste entram por issue, e falhas de segurança, em privado, pelos canais do [SECURITY.md](SECURITY.md).
+- Um laboratório que quer experimentar em homologação começa pelo [roteiro do piloto](docs/roteiro-do-piloto.md).
 
 ## Em uma página
 
@@ -32,6 +33,7 @@ A regra que organiza todo o desenho: **a senha do paciente no laboratório nunca
 README.md               este arquivo
 GOVERNANCE.md           quem decide mudanças hoje e como isso se transfere
 CHANGELOG.md            o que mudou em cada versão da especificação
+SECURITY.md             como relatar uma falha de segurança, em privado
 LICENSE                 Apache License 2.0 (código)
 LICENSE-spec            Creative Commons Atribuição 4.0 Internacional (texto)
 especificacao/          a especificação
@@ -46,6 +48,7 @@ docs/
   pontos-da-especificacao.md  ambiguidades encontradas na implementação
   apresentacao-para-laboratorios.md (e .pdf)
                         duas páginas para engenharia e segurança de laboratórios
+  roteiro-do-piloto.md  como um laboratório experimenta em homologação
 servidor-de-exemplo/    provedor de dados simulado, com dados sintéticos (código)
 suite-de-conformidade/  suíte de conformidade do provedor e receptor mínimo (código)
 ambiente-local/         PKI de teste e registro local assinado (código)

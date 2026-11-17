@@ -26,6 +26,14 @@ Pontos novos, da implementação da 0.2.2:
 | 32 | `api_base_url` terminado em `/v{M}` | 8.2, 9.1 | A 0.2.2 dá ao receptor a recusa (RCP-046), mas não há requisito de provedor sobre a própria entrada. A suíte confere a entrada do provedor dentro de REG-012 |
 | 33 | ERR-007 só é provocável se o provedor limita chamadas no `DELETE` ou tem um modo de indisponibilidade no ambiente de teste | 6.5, ERR-007 | Sem 429 nem 503 provocados, o teste termina não verificável |
 
+Pontos da leitura do repositório pelo lado de um laboratório, em 2026-11-17. Os capítulos também não foram alterados por eles:
+
+| # | Ponto | Onde | Sugestão |
+| --- | --- | --- | --- |
+| 34 | O texto diz que "uma suíte automatizada é trabalho futuro" e que a conformidade no piloto é só autodeclarada. A suíte do lado do provedor já existe neste repositório | 9.2, 7.10 | Na próxima versão do documento, dizer que há suíte do provedor, que a do receptor é trabalho futuro e que a admissão no piloto continua por autodeclaração |
+| 35 | A origem da regra de mTLS em todos os endpoints entre servidores aparece como "decisão do ticket", e o ticket não é público | 7.5, 7.9 | Trocar por "escolha deste protocolo", com o motivo, como nas outras linhas das tabelas |
+| 36 | A suíte executa os 132 requisitos sem olhar `scopes_supported`. Um provedor que implementa parte dos escopos, o que o registro admite, vê reprovados os grupos que não implementa | 8.2, 9.3, suíte | A suíte marcar como não aplicável o requisito de um escopo que o provedor não declara, e o capítulo 9 dizer quais requisitos dependem de qual escopo |
+
 ## Contradições ou lacunas que mudam comportamento
 
 | # | Ponto | Onde | Leitura adotada | Sugestão |
