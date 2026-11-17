@@ -2,7 +2,7 @@
 
 Gerado por `node ferramentas/gerar-cobertura.ts` a partir de [09-versionamento-e-conformidade.md](../especificacao/09-versionamento-e-conformidade.md), da lista de testes da suíte e do relatório de `pnpm conformidade:local`. Não edite à mão: rode os dois comandos de novo.
 
-Relatório usado: 2026-11-17T00:39:18.724Z. Contra o servidor de exemplo: 120 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 124 requisitos de provedor.
+Relatório usado: 2026-11-17T01:30:48.379Z. Contra o servidor de exemplo: 120 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 124 requisitos de provedor.
 
 Colunas:
 

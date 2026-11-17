@@ -536,7 +536,7 @@ export class Contexto {
     c: ClienteDeTeste,
     o: { escopos?: string[]; paciente?: PacienteDeTeste; expiracaoMs?: number; dataPeriod?: { start?: string; end?: string } } = {},
   ): Promise<Autorizacao> {
-    this.exigirControle('concluir a jornada do paciente');
+    if (!this.cfg.jornada_por_formulario) this.exigirControle('concluir a jornada do paciente');
     const consentId = await this.novoConsentimento(c, o);
     const { resposta, verificador, state, redirectUri } = await this.par(c, consentId, o.escopos ? { escopos: o.escopos } : {});
     const requestUri = (resposta.json as { request_uri?: unknown } | undefined)?.request_uri;
