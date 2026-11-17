@@ -1,6 +1,6 @@
 # Governança do Open Labs Brasil
 
-**Situação:** rascunho, fase de piloto, 2026-11-16.
+**Situação:** rascunho, fase de piloto, 2026-11-17.
 
 Este documento diz quem decide mudanças no Open Labs Brasil hoje e como esse poder de decisão passa a outros se o protocolo ganhar implementadores ou for adotado por uma entidade de padronização. Ele existe desde o primeiro commit porque um laboratório que avalia implementar um protocolo criado por um receptor precisa saber, antes de investir, que o criador não controla as regras sozinho para sempre.
 
@@ -8,7 +8,7 @@ O protocolo se chama Open Labs Brasil. O nome e os identificadores (`open-labs-b
 
 ## 1. Princípios
 
-1. **Aberto.** A especificação, o registro de participantes, as propostas de mudança e as decisões são públicos. Implementar não exige licença, taxa nem autorização do mantenedor. Durante o piloto o repositório é privado: até a abertura, "público" neste documento significa visível a todos os participantes do piloto, e a abertura do repositório é condição para a versão 1.0.0.
+1. **Aberto.** A especificação, o registro de participantes, as propostas de mudança e as decisões são públicos. Implementar não exige licença, taxa nem autorização do mantenedor. O repositório da especificação é público.
 2. **Neutro entre participantes.** As regras valem igualmente para qualquer provedor de dados e qualquer receptor, inclusive para o receptor operado pela Precisa Saúde.
 3. **Centrado no paciente.** Nenhuma mudança pode criar um caminho de acesso sem consentimento do paciente, com credenciais do paciente, ou para um receptor que não seja um aplicativo do próprio paciente. Estas três restrições só mudam pelo processo da seção 6.
 4. **Transferível.** A Precisa Saúde se compromete a transferir o controle de mudanças a uma entidade de padronização que o aceite, nas condições da seção 7.
@@ -60,7 +60,7 @@ Uma objeção é fundamentada quando aponta um dano concreto a pacientes, à seg
 
 ### 4.3 Segurança urgente
 
-Falhas de segurança são comunicadas em privado ao contato de segurança do repositório, e não em issue pública. O editor PODE publicar uma correção sem prazo de comentário, avisando os contatos de segurança de todos os participantes do registro antes ou no momento da publicação. A correção passa pelo processo normal de forma retroativa em até 30 dias, e pode ser revertida por ele.
+Falhas de segurança são comunicadas em privado, pelos canais de `SECURITY.md`, e não em issue pública. O editor PODE publicar uma correção sem prazo de comentário, avisando os contatos de segurança de todos os participantes do registro antes ou no momento da publicação. A correção passa pelo processo normal de forma retroativa em até 30 dias, e pode ser revertida por ele.
 
 ## 5. Comitê técnico (fase 1)
 
@@ -103,7 +103,7 @@ O mantenedor, na fase 0, ou o comitê, na fase 1, só aprova a transferência a 
 | Nome e eventuais marcas do protocolo | Cedidos à entidade, sem custo |
 | Repositório e histórico | Transferidos ou espelhados, a critério da entidade, com o histórico íntegro |
 | Operação do registro de participantes | Decidida em separado. Pode ir para a entidade, para um operador indicado por ela, ou ficar com um operador neutro escolhido pelo comitê |
-| Suíte de conformidade, quando existir | Acompanha a especificação |
+| Suíte de conformidade | Acompanha a especificação |
 | Licenças do que já foi publicado | Não mudam. Apache 2.0 e CC BY 4.0 são irrevogáveis para o que foi publicado sob elas |
 
 ### 7.4 Procedimento
