@@ -48,7 +48,7 @@ export interface ConfiguracaoDaSuite {
   hospedagem?: { endereco_de_escuta: string; porta: number; certificado: string; chave: string };
   clientes: Partial<Record<PapelDoCliente, ClienteConfigurado>> & { principal: ClienteConfigurado };
   certificado_nao_registrado?: ParDeCertificado;
-  pacientes: { principal: PacienteDeTeste; outro?: PacienteDeTeste; sem_cpf?: PacienteDeTeste };
+  pacientes: { principal: PacienteDeTeste; outro?: PacienteDeTeste; sem_cpf?: PacienteDeTeste; cpf_invalido?: PacienteDeTeste };
   agenda?: {
     unidade?: string;
     exame_comum?: string;

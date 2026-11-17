@@ -9,7 +9,7 @@ import { testesDeSeguranca } from './seguranca.ts';
 import type { Fase, Teste } from './tipos.ts';
 
 /** Ordem da fase de relógio: cada teste adianta o relógio, e REG-008 leva o registro à expiração. */
-const ORDEM_DO_RELOGIO = ['AUT-014', 'CNS-006', 'CNS-019', 'CNS-022', 'API-005', 'AGD-008', 'REG-004', 'REG-008'];
+const ORDEM_DO_RELOGIO = ['AUT-014', 'CNS-006', 'CNS-019', 'CNS-022', 'API-005', 'AGD-008', 'REG-004', 'REG-013', 'REG-008'];
 const FASES: Fase[] = ['normal', 'registro', 'relogio', 'final'];
 
 export const TODOS_OS_TESTES: Teste[] = [

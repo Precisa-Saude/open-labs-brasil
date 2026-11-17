@@ -58,7 +58,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       relatorio: { type: 'string', default: 'relatorios/conformidade-servidor-de-exemplo.json' },
     },
   });
-  console.log('Suíte de conformidade do Open Labs Brasil 0.2.1 contra o servidor de exemplo local');
+  console.log('Suíte de conformidade do Open Labs Brasil 0.2.2 contra o servidor de exemplo local');
   if (values.violacao?.length) console.log(`Modo de violações: ${values.violacao.join(', ')}`);
   const inicio = Date.now();
   const resultados = await executarContraServidorDeExemplo({

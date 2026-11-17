@@ -33,7 +33,7 @@ try {
   process.exit(2);
 }
 
-console.log(`Suíte de conformidade do Open Labs Brasil 0.2.1 contra ${ctx.provedor.display_name} (${ctx.issuer})`);
+console.log(`Suíte de conformidade do Open Labs Brasil 0.2.2 contra ${ctx.provedor.display_name} (${ctx.issuer})`);
 const resultados = await executarSuite(ctx, {
   ...(values.somente ? { somente: values.somente.split(',').map((s) => s.trim()) } : {}),
   aoTerminar: (r) => console.log(linhaDeProgresso(r)),

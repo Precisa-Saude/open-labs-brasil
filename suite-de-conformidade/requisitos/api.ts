@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { Contexto } from '../contexto.ts';
 import { cabecalhoUnico, type Resposta } from '../http.ts';
 import { esperar, falhar, naoVerificavel } from '../resultado.ts';
+import { linkAbsolutoHttps } from '../../comum/metadados.ts';
 import { codigoDoErro, dentroDaBase, erroApi, linkProximo, recursos, resumo, SISTEMA_DE_ERROS, sucesso, todasAsPaginas, type Json } from '../verificacoes.ts';
 import { cenario, corpoDeAgendamento, criarAgendamento, janela } from './apoio.ts';
 import { tokenRecusado } from './consentimento.ts';
@@ -360,6 +361,38 @@ export const testesDeApi: Teste[] = [
     },
   },
   {
+    id: 'API-013',
+    titulo: 'Todo link de paginação é URL absoluta https sem componente de usuário',
+    executar: async (ctx, r) => {
+      const c = ctx.cliente('principal');
+      const cen = await cenario(ctx);
+      const j = janela(ctx, 7);
+      const buscas: Array<[string, string]> = [
+        [await ctx.tokenDeProvedor(c, 'catalog.read'), 'ActivityDefinition?_count=1'],
+        [await ctx.tokenDeProvedor(c, 'catalog.read'), 'ChargeItemDefinition?_count=1'],
+        [await ctx.tokenDeProvedor(c, 'locations.read'), 'Location?_count=1'],
+        [cen.tokenDeAgenda, `Slot?schedule=${cen.agenda}&start=ge${j.inicio}&start=lt${j.fim}&_count=2`],
+        [cen.autorizacao.accessToken, `DiagnosticReport?patient=${cen.pacienteRef}&_count=1`],
+        [cen.autorizacao.accessToken, `Consent?patient=${cen.pacienteRef}&_count=1`],
+      ];
+      let links = 0;
+      for (const [token, caminho] of buscas) {
+        let url: string | undefined = `${ctx.fhirBase}/${caminho}`;
+        for (let i = 0; url && i < 3; i++) {
+          const b = sucesso(await ctx.fhir(token, url));
+          const proximo = linkProximo(b);
+          if (proximo) {
+            links++;
+            esperar(linkAbsolutoHttps(proximo), `link next que não é URL absoluta https sem usuário em ${caminho.split('?')[0]}: ${proximo}`);
+          }
+          url = proximo && dentroDaBase(proximo, ctx.fhirBase, url) ? new URL(proximo, url).toString() : undefined;
+        }
+      }
+      esperar(links > 0, 'nenhuma busca produziu link next para conferir');
+      r.evidencia(`${links} links next, todos absolutos, https e sem componente de usuário`);
+    },
+  },
+  {
     id: 'API-012',
     titulo: 'Todo link de paginação fica dentro do fhir_base_url do registro',
     executar: async (ctx, r) => {
@@ -385,9 +418,10 @@ export const testesDeApi: Teste[] = [
           const proximo = linkProximo(b);
           if (proximo) {
             links++;
-            if (!dentroDaBase(proximo, ctx.fhirBase)) falhar(`link next fora do fhir_base_url em ${caminho.split('?')[0]}: ${proximo}`);
+            // Link relativo é resolvido contra a URL da requisição (seção 5.1, 0.2.2); a forma do link é API-013.
+            if (!dentroDaBase(proximo, ctx.fhirBase, url)) falhar(`link next fora do fhir_base_url em ${caminho.split('?')[0]}: ${proximo}`);
           }
-          url = proximo;
+          url = proximo ? new URL(proximo, url).toString() : undefined;
         }
       }
       esperar(links > 0, 'nenhuma busca produziu link next para conferir');

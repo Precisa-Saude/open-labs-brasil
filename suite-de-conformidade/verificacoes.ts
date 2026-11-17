@@ -63,14 +63,18 @@ export async function todasAsPaginas(ctx: Contexto, token: string, caminho: stri
   const bundles: Json[] = [];
   let url: string | undefined = caminho.startsWith('https://') ? caminho : `${ctx.fhirBase}/${caminho.replace(/^\//, '')}`;
   let paginas = 0;
+  let anterior: string | undefined;
   while (url) {
-    if (!dentroDaBase(url, ctx.fhirBase)) falhar(`link de paginação fora do fhir_base_url: ${url}`);
+    // Link relativo resolvido contra a URL da requisição que devolveu o Bundle (seção 5.1).
+    if (!dentroDaBase(url, ctx.fhirBase, anterior)) falhar(`link de paginação fora do fhir_base_url: ${url}`);
+    url = anterior ? new URL(url, anterior).toString() : url;
     const r = await ctx.fhir(token, url);
     const b = sucesso(r);
     bundles.push(b);
     lista.push(...recursos(b));
     paginas++;
     if (paginas > limite) falhar('paginação não termina');
+    anterior = url;
     url = linkProximo(b);
   }
   return { recursos: lista, paginas, bundles };

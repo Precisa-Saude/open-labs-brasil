@@ -154,6 +154,10 @@ export async function tratarConsentimentos(provedor: Provedor, req: IncomingMess
       if (!c || c.client_id !== acesso.clientId) throw new ErroDeApi(404, 'CONSENT_NOT_FOUND', 'not-found', 'Consentimento não encontrado.');
       if (ESTADOS_FINAIS.includes(c.status)) {
         if (provedor.violacao('revogacao-repetida-aceita')) return enviarVazio(res, 204);
+        if (provedor.violacao('revogacao-repetida-sobrescreve') && c.status === 'REVOKED') {
+          c.status_reason = { code: motivo as (typeof MOTIVOS_DO_RECEPTOR)[number], ended_via: 'RECEIVER' };
+          return enviarVazio(res, 204);
+        }
         throw new ErroDeApi(422, 'CONSENT_INVALID_STATE', 'business-rule', `O consentimento já está em ${c.status}.`);
       }
       if (c.status === 'AWAITING_AUTHORISATION') {

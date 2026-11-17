@@ -186,6 +186,52 @@ export const testesDeConsentimento: Teste[] = [
     },
   },
   {
+    id: 'CNS-025',
+    titulo: 'CPF inválido no cadastro do provedor é tratado como ausência de CPF (PATIENT_WITHOUT_CPF)',
+    executar: async (ctx, r) => {
+      const c = ctx.cliente('principal');
+      const paciente = ctx.paciente('cpf_invalido');
+      const id = await ctx.novoConsentimento(c);
+      const { resposta } = await ctx.par(c, id);
+      const ru = (resposta.json as { request_uri?: string }).request_uri ?? falhar(`PAR recusado: ${resumo(resposta)}`);
+      const j = await ctx.jornada(c.clientId, ru, paciente, 'aprovar');
+      esperar(j.location && new URL(j.location).searchParams.get('error') === 'access_denied', `paciente com CPF inválido no cadastro sem access_denied: ${j.location ?? j.pagina_de_erro ?? ''}`);
+      const e = estado(await lerComProvedor(ctx, c, id));
+      esperar(e.status === 'REJECTED' && e.code === 'PATIENT_WITHOUT_CPF', `estado: ${JSON.stringify(e)}`);
+      r.evidencia(`paciente ${paciente.usuario}: access_denied; REJECTED PATIENT_WITHOUT_CPF`);
+    },
+  },
+  {
+    id: 'CNS-026',
+    titulo: 'DELETE repetido ou concorrente: uma transição, motivo da primeira, 204 ou 422 CONSENT_INVALID_STATE',
+    executar: async (ctx, r) => {
+      const c = ctx.cliente('principal');
+      const token = await ctx.tokenDeProvedor(c, 'consent.manage');
+      const apagar = (id: string, motivo: string) => ctx.consentimentos('DELETE', `/${id}?reason=${motivo}`, token, { credencial: c.credenciais[0]! });
+      const aceitavel = (x: Resposta) => x.status === 204 || (x.status === 422 && codigoDoErro(x) === 'CONSENT_INVALID_STATE');
+      // Concorrente: cinco DELETE ao mesmo tempo, com dois motivos.
+      const a = await ctx.autorizar(c);
+      const motivos = ['PATIENT_REQUEST', 'RECEIVER_TERMINATION', 'PATIENT_REQUEST', 'RECEIVER_TERMINATION', 'PATIENT_REQUEST'];
+      const respostas = await Promise.all(motivos.map((m) => apagar(a.consentId, m)));
+      const ruins = respostas.filter((x) => !aceitavel(x));
+      esperar(ruins.length === 0, `resposta fora de 204 e 422 CONSENT_INVALID_STATE: ${ruins.map(resumo).join('; ')}`);
+      const com204 = respostas.map((x, i) => [x, motivos[i]!] as const).filter(([x]) => x.status === 204);
+      esperar(com204.length >= 1, 'nenhum DELETE recebeu 204');
+      const final = estado(await lerComProvedor(ctx, c, a.consentId));
+      esperar(final.status === 'REVOKED', `estado depois dos DELETE concorrentes: ${String(final.status)}`);
+      if (com204.length === 1) esperar(final.code === com204[0]![1], `status_reason ${String(final.code)}, mas o 204 foi do DELETE com ${com204[0]![1]}`);
+      else esperar(motivos.includes(String(final.code)), `status_reason ${String(final.code)} não é de nenhum DELETE`);
+      r.evidencia(`5 DELETE concorrentes: ${com204.length} com 204, ${respostas.length - com204.length} com 422; REVOKED ${String(final.code)}`);
+      // Repetido: o segundo não muda o motivo da primeira.
+      const b = await ctx.autorizar(c);
+      esperar((await apagar(b.consentId, 'PATIENT_MISMATCH')).status === 204, 'primeiro DELETE recusado');
+      erroApi(await apagar(b.consentId, 'PATIENT_REQUEST'), 422, 'CONSENT_INVALID_STATE');
+      const depois = estado(await lerComProvedor(ctx, c, b.consentId));
+      esperar(depois.code === 'PATIENT_MISMATCH', `o DELETE repetido trocou o motivo para ${String(depois.code)}`);
+      r.evidencia('DELETE repetido: 422 CONSENT_INVALID_STATE, motivo da primeira chamada mantido');
+    },
+  },
+  {
     id: 'CNS-012',
     titulo: 'GET /consents/{id} com token de paciente devolve patient.cpf e patient.fhir_id',
     executar: async (ctx, r) => {

@@ -27,6 +27,9 @@ export interface ResultadoDaRecarga {
 
 const SETE_DIAS_MS = 7 * 24 * 3600_000;
 
+/** Versões do protocolo que este software implementa. */
+export const VERSOES_IMPLEMENTADAS = ['0.2'];
+
 export class RegistroDoProvedor {
   readonly cfg: ConfiguracaoDoServidor;
   readonly relogio: Relogio;
@@ -89,6 +92,21 @@ export class RegistroDoProvedor {
     if (this.cfg.violacoes.has('registro-aceita-sequencia-menor')) pular.push('V9');
     if (this.cfg.violacoes.has('registro-sem-schema')) pular.push('V7');
     if (this.cfg.violacoes.has('registro-sem-conferir-ambiente')) pular.push('V8');
+    if (this.cfg.violacoes.has('registro-aceita-crit')) pular.push('V3');
+    const cabecalho = (() => {
+      try {
+        return JSON.parse(Buffer.from(jws.trim().split('.')[0] ?? '', 'base64url').toString('utf8')) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })();
+    if (this.cfg.violacoes.has('registro-exige-typ-jose') && cabecalho.typ !== 'JOSE') {
+      return { aceito: false, passo: 'V3', motivo: 'typ diferente de JOSE (violação deliberada)', sequencia: this.documento.sequence };
+    }
+    if (this.cfg.violacoes.has('registro-usa-jwk-do-cabecalho') && cabecalho.jwk) {
+      // Só no modo de violações: verificar com a chave do cabeçalho, o que falha quando ela não é a do registro.
+      return { aceito: false, passo: 'V6', motivo: 'assinatura conferida com jwk do cabeçalho (violação deliberada)', sequencia: this.documento.sequence };
+    }
     const r = await verificarCandidato({
       bytes,
       jws,
@@ -151,6 +169,9 @@ export class RegistroDoProvedor {
   /** O receptor pode ser atendido: ativo e com versão de protocolo efetiva em comum (seção 9.1). */
   receptorAtendivel(receptor: Participante): boolean {
     if (receptor.status !== 'active') return false;
-    return versaoEfetiva(this.provedor().protocol_versions, receptor.protocol_versions) !== undefined;
+    const efetiva = versaoEfetiva(this.provedor().protocol_versions, receptor.protocol_versions);
+    if (efetiva === undefined) return false;
+    // Seção 9.1, passo 5: a versão efetiva que o software não implementa conta como inexistente.
+    return VERSOES_IMPLEMENTADAS.includes(efetiva) || this.cfg.violacoes.has('versao-nao-implementada-aceita');
   }
 }

@@ -19,7 +19,7 @@ describe('suíte de conformidade', () => {
     const testados = new Set(TODOS_OS_TESTES.map((t) => t.id));
     expect(doProvedor.filter((id) => !testados.has(id))).toEqual([]);
     expect([...testados].filter((id) => !doProvedor.includes(id))).toEqual([]);
-    expect(doProvedor.length).toBe(124);
+    expect(doProvedor.length).toBe(132);
   });
 
   it('passa por inteiro contra o servidor de exemplo', async () => {
@@ -28,6 +28,6 @@ describe('suíte de conformidade', () => {
     expect(reprovados).toEqual([]);
     const naoVerificaveis = resultados.filter((r) => r.situacao === 'nao_verificavel').map((r) => r.id).sort();
     expect(naoVerificaveis).toEqual(['API-008', 'AUT-024', 'CNS-008', 'CNS-023']);
-    expect(resultados).toHaveLength(124);
+    expect(resultados).toHaveLength(132);
   });
 });

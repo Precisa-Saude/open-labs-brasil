@@ -65,7 +65,8 @@ function suspenderSentinela(ctx: Contexto) {
 }
 
 async function assinar(bytes: Uint8Array, chave: CryptoKey | KeyObject, cabecalho: Record<string, unknown>): Promise<string> {
-  const compacto = await new CompactSign(bytes).setProtectedHeader(cabecalho as { alg: string }).sign(chave);
+  const crit = Array.isArray(cabecalho.crit) ? Object.fromEntries((cabecalho.crit as string[]).map((n) => [n, true])) : undefined;
+  const compacto = await new CompactSign(bytes).setProtectedHeader(cabecalho as { alg: string }).sign(chave, crit ? { crit } : undefined);
   const [h, , s] = compacto.split('.');
   return `${h}..${s}`;
 }
@@ -87,9 +88,9 @@ async function sentinelaAtendido(ctx: Contexto): Promise<boolean> {
 }
 
 /** Publica um documento válido e o registra como aceito, se o provedor o aceitar. */
-async function publicarValido(ctx: Contexto, chave: ChaveDoRegistro, doc: DocumentoDoRegistro): Promise<void> {
+async function publicarValido(ctx: Contexto, chave: ChaveDoRegistro, doc: DocumentoDoRegistro, cabecalho?: Record<string, unknown>): Promise<void> {
   const bytes = bytesDe(doc);
-  const jws = await assinar(bytes, chave.chave, { alg: 'PS256', kid: chave.kid, typ: 'JOSE' });
+  const jws = await assinar(bytes, chave.chave, cabecalho ?? { alg: 'PS256', kid: chave.kid, typ: 'JOSE' });
   await publicarERecarregar(ctx, bytes, jws);
   ctx.registroAceito = { documento: doc, bytes, jws };
 }
@@ -188,6 +189,10 @@ export const testesDeRegistro: Teste[] = [
         (sentinela(ctx, d).receiver!.eligibility as { health_plan_operator: boolean }).health_plan_operator = true;
       });
       await deveRecusar(ctx, r, 'receptor com health_plan_operator true', operadora.bytes, operadora.jws);
+      const duasVersoes = await candidatoAssinado(ctx, chave, (d) => {
+        sentinela(ctx, d).protocol_versions = ['0.2', '1.0'];
+      });
+      await deveRecusar(ctx, r, 'protocol_versions com 0.2 e 1.0 (regra do schema desde a 0.2.2)', duasVersoes.bytes, duasVersoes.jws);
     },
   },
   {
@@ -329,6 +334,78 @@ export const testesDeRegistro: Teste[] = [
       await publicarValido(ctx, chave, candidato(ctx));
       esperar(await sentinelaAtendido(ctx), 'o sentinela de volta a 0.2 continua recusado');
       r.evidencia('sentinela de volta a 0.2: atendido; o caso 1.1 com 1.3 não se aplica a provedor 0.x');
+    },
+  },
+  {
+    id: 'REG-011',
+    titulo: 'Ignora typ e membros extras do cabeçalho do registro, não usa nenhum deles para obter a chave, e recusa crit',
+    fase: 'registro',
+    executar: async (ctx, r) => {
+      const chave = await chaveDoRegistro(ctx);
+      const outra = await generateKeyPair('PS256', { modulusLength: 2048, extractable: true });
+      const jwkDeOutra = await exportJWK(outra.publicKey);
+      const aceitos: Array<[string, Record<string, unknown>]> = [
+        ['typ JWT', { alg: 'PS256', kid: chave.kid, typ: 'JWT' }],
+        ['membro a mais', { alg: 'PS256', kid: chave.kid, typ: 'JOSE', 'x-nota': 'teste' }],
+        ['jwk de outra chave no cabeçalho', { alg: 'PS256', kid: chave.kid, typ: 'JOSE', jwk: jwkDeOutra }],
+      ];
+      esperar(await sentinelaAtendido(ctx), 'o cliente sentinela não obtém token com o registro atual');
+      for (const [nome, cabecalho] of aceitos) {
+        await publicarValido(ctx, chave, candidato(ctx, suspenderSentinela(ctx)), cabecalho);
+        const aceito = !(await sentinelaAtendido(ctx));
+        await publicarValido(ctx, chave, candidato(ctx));
+        esperar(await sentinelaAtendido(ctx), 'o registro de restauração não foi aceito');
+        esperar(aceito, `candidato válido com ${nome} foi recusado`);
+        r.evidencia(`${nome}: aceito`);
+      }
+      const comCrit = await candidatoAssinado(ctx, chave, () => {});
+      const jwsCrit = await assinar(comCrit.bytes, chave.chave, { alg: 'PS256', kid: chave.kid, typ: 'JOSE', crit: ['x-extensao'], 'x-extensao': true });
+      await deveRecusar(ctx, r, 'crit no cabeçalho', comCrit.bytes, jwsCrit);
+    },
+  },
+  {
+    id: 'REG-012',
+    titulo: 'Trata como inexistente a versão efetiva que o próprio software não implementa',
+    fase: 'registro',
+    executar: async (ctx, r) => {
+      const chave = await chaveDoRegistro(ctx);
+      const p = ctx.provedor;
+      const major = p.protocol_versions[0]!.split('.')[0]!;
+      esperar(p.provider!.api_base_url.replace(/\/$/, '').endsWith(`/v${major}`), `api_base_url do provedor não termina em /v${major}`);
+      esperar(await sentinelaAtendido(ctx), 'o sentinela não obtém token com o registro atual');
+      // O provedor e o sentinela passam a declarar 0.9, versão que nenhum software 0.2 implementa.
+      await publicarValido(ctx, chave, candidato(ctx, (d) => {
+        d.participants.find((x) => x.participant_id === p.participant_id)!.protocol_versions = ['0.9'];
+        sentinela(ctx, d).protocol_versions = ['0.9'];
+      }));
+      const atendido = await sentinelaAtendido(ctx);
+      await publicarValido(ctx, chave, candidato(ctx));
+      esperar(await sentinelaAtendido(ctx), 'o registro de restauração não foi aceito');
+      esperar(!atendido, 'provedor e sentinela declarando 0.9: o provedor, que implementa 0.2, atendeu o sentinela');
+      r.evidencia(`api_base_url termina em /v${major}; com 0.9 nos dois lados, sentinela recusado; restaurado`);
+    },
+  },
+  {
+    id: 'REG-013',
+    titulo: 'Com o registro expirado, recusa authorization_code com unauthorized_client, inclusive de jornada aberta antes',
+    fase: 'relogio',
+    executar: async (ctx, r) => {
+      const c = ctx.cliente('principal');
+      exigirPublicacao(ctx);
+      const chave = await chaveDoRegistro(ctx);
+      await ctx.sincronizarRelogio();
+      const expira = Date.parse(ctx.registroDoProvedorExpiraEm ?? ctx.registroAceito.documento.expires_at);
+      await ctx.avancarRelogio(Math.max(1, Math.ceil((expira - ctx.agoraMs()) / 1000) - 30));
+      const consentId = await ctx.novoConsentimento(c);
+      const par = await ctx.par(c, consentId);
+      const requestUri = (par.resposta.json as { request_uri?: string }).request_uri ?? falhar(`PAR recusado: ${resumo(par.resposta)}`);
+      const j = await ctx.jornada(c.clientId, requestUri, ctx.paciente('principal'));
+      const code = new URL(j.location ?? falhar(`jornada sem redirecionamento: ${j.pagina_de_erro ?? ''}`)).searchParams.get('code') ?? falhar('sem code');
+      await ctx.avancarRelogio(40);
+      const troca = await ctx.trocarCodigo(c, code, par.verificador, par.redirectUri);
+      await publicarValido(ctx, chave, candidato(ctx));
+      erroOAuth(troca, 400, 'unauthorized_client');
+      r.evidencia('jornada aberta 30 s antes do vencimento, código trocado 10 s depois: 400 unauthorized_client; registro novo publicado');
     },
   },
   {

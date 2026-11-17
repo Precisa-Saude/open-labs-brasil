@@ -2,6 +2,7 @@
 // consentimento, erro, pagamento e gestão de consentimentos. São páginas de
 // teste e dizem isso em destaque.
 
+import { cpfValido } from '../comum/cpf.ts';
 import { escaparHtml as e } from './http.ts';
 import { PACIENTES, SENHA_DE_TESTE } from './dados.ts';
 
@@ -41,7 +42,7 @@ ${corpo}
 
 function listaDePacientesDeTeste(): string {
   const linhas = PACIENTES.map(
-    (p) => `<tr><td><code>${e(p.usuario)}</code></td><td>${e(`${p.nome.given.join(' ')} ${p.nome.family}`)}</td><td>${p.cpf ? 'com CPF' : '<strong>sem CPF</strong>'}</td></tr>`,
+    (p) => `<tr><td><code>${e(p.usuario)}</code></td><td>${e(`${p.nome.given.join(' ')} ${p.nome.family}`)}</td><td>${cpfValido(p.cpf) ? 'com CPF' : p.cpf ? '<strong>CPF inválido</strong>' : '<strong>sem CPF</strong>'}</td></tr>`,
   ).join('');
   return `<details><summary>Pacientes sintéticos disponíveis (senha <code>${e(SENHA_DE_TESTE)}</code>)</summary>
 <table><thead><tr><th>Usuário</th><th>Nome</th><th>Cadastro</th></tr></thead><tbody>${linhas}</tbody></table></details>`;

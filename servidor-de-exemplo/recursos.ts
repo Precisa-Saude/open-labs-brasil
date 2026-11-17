@@ -76,7 +76,7 @@ export function autenticarRecurso(provedor: Provedor, req: IncomingMessage, url:
     token.janela.chamadas++;
     if (token.janela.chamadas > provedor.cfg.limitePorMinuto) {
       const espera = Math.max(1, Math.ceil((token.janela.inicio + 60_000 - agora) / 1000));
-      throw new ErroDeApi(429, 'RATE_LIMITED', 'throttled', 'Limite de chamadas excedido.', { cabecalhos: provedor.violacao('sem-retry-after') ? {} : { 'Retry-After': String(espera) } });
+      throw new ErroDeApi(429, 'RATE_LIMITED', 'throttled', 'Limite de chamadas excedido.', { cabecalhos: provedor.violacao('sem-retry-after') ? {} : { 'Retry-After': provedor.violacao('retry-after-longo') ? '172800' : String(espera) } });
     }
   }
   return { receptor, clientId: receptor.participant_id, token, x5t };

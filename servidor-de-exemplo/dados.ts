@@ -125,6 +125,8 @@ export const PACIENTES: Paciente[] = [
   { id: 'pac-ana', usuario: 'ana', nome: { given: ['Ana'], family: 'Exemplo Sintética' }, cpf: completarCpf('529982247'), nascimento: '1985-04-12', sexo: 'female' },
   { id: 'pac-bruno', usuario: 'bruno', nome: { given: ['Bruno'], family: 'Exemplo Sintético' }, cpf: completarCpf('111444777'), nascimento: '1979-09-30', sexo: 'male' },
   { id: 'pac-carla', usuario: 'carla', nome: { given: ['Carla'], family: 'Sem CPF Sintética' }, cns: completarCnsProvisorio('89800000000001'), nascimento: '1992-01-20', sexo: 'female' },
+  // CPF de preenchimento no cadastro: passa no cálculo dos dígitos e é inválido pela seção 4.4 (CNS-025).
+  { id: 'pac-diego', usuario: 'diego', nome: { given: ['Diego'], family: 'CPF Inválido Sintético' }, cpf: '00000000000', nascimento: '1988-07-03', sexo: 'male' },
 ];
 
 /** Identificadores que a configuração da suíte usa para os testes de resultados e agendamento. */

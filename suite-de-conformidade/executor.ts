@@ -74,7 +74,7 @@ export function resumoDaExecucao(resultados: Resultado[]): string {
 
 export function relatorioJson(resultados: Resultado[], extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    especificacao: '0.2.1',
+    especificacao: '0.2.2',
     protocolo: '0.2',
     gerado_em: new Date().toISOString(),
     ...extra,

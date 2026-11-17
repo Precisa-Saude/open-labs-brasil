@@ -32,7 +32,7 @@ export const VIOLACOES = {
   'consentimento-sem-prazo-de-autorizacao': { requisitos: ['CNS-006'], descricao: 'Consentimento não vai a REJECTED em 60 minutos' },
   'cpf-com-token-de-provedor': { requisitos: ['CNS-013'], descricao: 'patient devolvido com token de provedor' },
   'revogacao-nao-invalida-tokens': { requisitos: ['CNS-016'], descricao: 'Tokens continuam valendo depois da revogação' },
-  'revogacao-repetida-aceita': { requisitos: ['CNS-018'], descricao: 'DELETE em estado final devolve 204' },
+  'revogacao-repetida-aceita': { requisitos: ['CNS-018', 'CNS-026'], descricao: 'DELETE em estado final devolve 204' },
   'consentimento-de-outro-cliente-visivel': { requisitos: ['CNS-021'], descricao: 'Consentimento de outro cliente legível' },
   'sem-interaction-id': { requisitos: ['API-001'], descricao: 'x-fapi-interaction-id nem exigido nem devolvido' },
   'ignora-parametro-desconhecido': { requisitos: ['API-006'], descricao: 'Parâmetro de busca desconhecido ignorado' },
@@ -105,6 +105,18 @@ export const VIOLACOES = {
   'consentimentos-de-outros-receptores': { requisitos: ['RES-009'], descricao: 'Consent de outros receptores visível' },
   'erro-oauth-inventado': { requisitos: ['ERR-001'], tambem: ['AUT-003'], descricao: 'Código de erro OAuth fora da seção 6.2' },
   'sem-retry-after': { requisitos: ['ERR-005'], descricao: '429 e 503 sem Retry-After' },
+  // 0.2.2
+  'registro-aceita-crit': { requisitos: ['REG-011'], descricao: 'Registro aceito com crit no cabeçalho' },
+  'registro-exige-typ-jose': { requisitos: ['REG-011'], descricao: 'Registro recusado quando typ não é JOSE' },
+  'registro-usa-jwk-do-cabecalho': { requisitos: ['REG-011'], descricao: 'Chave do registro tirada de jwk do cabeçalho' },
+  'versao-nao-implementada-aceita': { requisitos: ['REG-012'], descricao: 'Versão efetiva que o software não implementa tratada como válida' },
+  'troca-de-codigo-com-registro-expirado': { requisitos: ['REG-013'], descricao: 'Código trocado com o registro expirado' },
+  'cpf-invalido-aceito': { requisitos: ['CNS-025'], descricao: 'CPF de onze algarismos iguais aceito como CPF do paciente' },
+  'revogacao-repetida-sobrescreve': { requisitos: ['CNS-026'], descricao: 'DELETE repetido devolve 204 e troca o motivo' },
+  'paginacao-relativa': { requisitos: ['API-013'], descricao: 'link next relativo' },
+  'paginacao-com-usuario': { requisitos: ['API-013'], descricao: 'link next com componente de usuário' },
+  'contexto-de-preco-desconhecido': { requisitos: ['CAT-005'], descricao: 'Preço com useContext fora de venue e brand' },
+  'retry-after-longo': { requisitos: ['ERR-007'], descricao: 'Retry-After de 172800 segundos na revogação' },
 } as const satisfies Record<string, { requisitos: readonly string[]; tambem?: readonly string[]; descricao: string }>;
 
 export type Violacao = keyof typeof VIOLACOES;

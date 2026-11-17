@@ -128,6 +128,15 @@ export class Provedor {
       const base = [...this.dados.tipo('ChargeItemDefinition').values()][0]!;
       this.dados.gravar({ ...structuredClone(base.recurso), id: 'preco-orfao', url: 'https://laboratorio.example/fhir/ChargeItemDefinition/preco-orfao', code: { coding: [{ system: 'https://laboratorio.example/fhir/produtos', code: 'NAO-EXISTE' }] } }, base.atualizadoEm);
     }
+    if (cfg.violacoes.has('contexto-de-preco-desconhecido')) {
+      const base = [...this.dados.tipo('ChargeItemDefinition').values()][0]!;
+      this.dados.gravar({
+        ...structuredClone(base.recurso),
+        id: 'preco-de-programa',
+        url: 'https://laboratorio.example/fhir/ChargeItemDefinition/preco-de-programa',
+        useContext: [{ code: { system: 'http://terminology.hl7.org/CodeSystem/usage-context-type', code: 'program' }, valueCodeableConcept: { text: 'Programa de fidelidade' } }],
+      }, base.atualizadoEm);
+    }
     if (cfg.violacoes.has('observacao-sem-loinc')) {
       const obs = this.dados.tipo('Observation').get('obs-ana-2026-rotina-gli')!;
       obs.recurso = { ...obs.recurso, code: { coding: [{ system: 'https://laboratorio.example/fhir/produtos', code: 'GLI', display: 'Glicose' }] } };

@@ -100,4 +100,4 @@ for (const l of linhas.filter((x) => x.id.startsWith('RCP-'))) {
 }
 saida.push('');
 writeFileSync(resolve(RAIZ, 'docs/cobertura-de-requisitos.md'), saida.join('\n'));
-console.log(`docs/cobertura-de-requisitos.md: ${provedor.length} requisitos de provedor, ${linhas.length - provedor.length} de receptor`);
+console.log(`docs/cobertura-de-requisitos.md: ${provedor.filter((l) => !l.requisito.startsWith("*Retirado")).length} requisitos de provedor em vigor, ${linhas.filter((l) => l.id.startsWith("RCP-") && !l.requisito.startsWith("*Retirado")).length} de receptor`);

@@ -293,6 +293,53 @@ export const testesDeResultadosEErros: Teste[] = [
     },
   },
   {
+    id: 'ERR-007',
+    titulo: 'Retry-After de no máximo 86400 no DELETE de consentimento e no token com consent.manage',
+    executar: async (ctx, r) => {
+      const c = ctx.cliente('principal');
+      const limite = (valor: string | undefined): boolean => {
+        if (!valor) return true;
+        if (/^\d+$/.test(valor)) return Number(valor) <= 86400;
+        const ms = Date.parse(valor);
+        return !Number.isNaN(ms) && ms - ctx.agoraMs() <= 86400_000 + 5000;
+      };
+      let observados = 0;
+      const token = await ctx.tokenDeProvedor(c, 'consent.manage');
+      // 429 no DELETE, se o provedor limitar chamadas.
+      for (let i = 0; i < 300; i++) {
+        const resp = await ctx.http.requisitar(`${ctx.apiBase}/consents/consentimento-inexistente-err-007`, {
+          metodo: 'DELETE',
+          cabecalhos: { authorization: `Bearer ${token}`, accept: 'application/json', 'x-fapi-interaction-id': randomUUID() },
+          credencial: c.credenciais[0]!,
+          semHistorico: true,
+        });
+        if (resp.status === 429 || resp.status === 503) {
+          esperar(limite(cabecalhoUnico(resp, 'retry-after')), `DELETE ${resp.status} com Retry-After ${cabecalhoUnico(resp, 'retry-after')}`);
+          observados++;
+          r.evidencia(`DELETE ${resp.status}: Retry-After ${cabecalhoUnico(resp, 'retry-after') ?? '(ausente)'}`);
+          break;
+        }
+      }
+      if (ctx.temControle) {
+        await ctx.controle('POST', '/_controle/indisponibilidade', { ativo: true });
+        try {
+          const del = await ctx.consentimentos('DELETE', '/consentimento-inexistente-err-007', token, { credencial: c.credenciais[0]! });
+          const tok = await ctx.tokenCc(c, ['consent.manage']);
+          for (const [nome, resp] of [['DELETE', del], ['token consent.manage', tok]] as const) {
+            if (resp.status !== 429 && resp.status !== 503) continue;
+            esperar(limite(cabecalhoUnico(resp, 'retry-after')), `${nome} ${resp.status} com Retry-After ${cabecalhoUnico(resp, 'retry-after')}`);
+            observados++;
+            r.evidencia(`${nome} ${resp.status}: Retry-After ${cabecalhoUnico(resp, 'retry-after') ?? '(ausente)'}`);
+          }
+        } finally {
+          await ctx.controle('POST', '/_controle/indisponibilidade', { ativo: false });
+        }
+      }
+      if (observados === 0) naoVerificavel('nenhum 429 ou 503 provocado no DELETE de consentimento nem no token com consent.manage');
+      if (!ctx.temControle) r.marcarParcial('sem interface de controle, o 503 não foi provocado');
+    },
+  },
+  {
     id: 'ERR-006',
     titulo: 'Respostas de erro do endpoint de autorização trazem iss',
     executar: async (ctx, r) => {

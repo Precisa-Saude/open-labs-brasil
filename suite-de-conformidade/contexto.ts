@@ -222,7 +222,7 @@ export class Contexto {
     return c;
   }
 
-  paciente(papel: 'principal' | 'outro' | 'sem_cpf'): PacienteDeTeste {
+  paciente(papel: 'principal' | 'outro' | 'sem_cpf' | 'cpf_invalido'): PacienteDeTeste {
     const p = this.cfg.pacientes[papel];
     if (!p) naoVerificavel(`a configuração não tem o paciente de teste "${papel}"`);
     return p;

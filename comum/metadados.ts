@@ -33,18 +33,34 @@ export function urlDosMetadados(issuer: string): string {
   return `${u.origin}/.well-known/oauth-authorization-server${caminho}`;
 }
 
-/** Link de paginação dentro do fhir_base_url: esquema, host, porta e prefixo em fronteira de segmento (seção 5.1). */
-export function dentroDaBase(url: string, base: string): boolean {
+/**
+ * Link de paginação dentro do fhir_base_url: esquema, host, porta, prefixo em
+ * fronteira de segmento e sem componente de usuário (seção 5.1). Link relativo
+ * é resolvido antes contra a URL da requisição (`relativoA`), pelo RFC 3986.
+ */
+export function dentroDaBase(url: string, base: string, relativoA?: string): boolean {
   let u: URL;
   let b: URL;
   try {
-    u = new URL(url);
+    u = relativoA ? new URL(url, relativoA) : new URL(url);
     b = new URL(base);
   } catch {
     return false;
   }
+  if (u.username || u.password) return false;
   const porta = (x: URL) => x.port || (x.protocol === 'https:' ? '443' : '80');
   if (u.protocol !== b.protocol || u.hostname !== b.hostname || porta(u) !== porta(b)) return false;
   const prefixo = b.pathname.replace(/\/$/, '');
   return u.pathname === prefixo || u.pathname.startsWith(`${prefixo}/`);
+}
+
+/** Link de paginação como o provedor DEVE emitir (API-013): URL absoluta, https, sem componente de usuário. */
+export function linkAbsolutoHttps(url: string): boolean {
+  if (!/^https:\/\//i.test(url)) return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && !u.username && !u.password && !/^https:\/\/[^/]*@/i.test(url);
+  } catch {
+    return false;
+  }
 }

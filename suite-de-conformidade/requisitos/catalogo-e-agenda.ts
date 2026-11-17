@@ -94,6 +94,30 @@ export const testesDeCatalogoEAgenda: Teste[] = [
     },
   },
   {
+    id: 'CAT-005',
+    titulo: 'useContext dos preços só com venue e brand, cada um com valueReference.reference',
+    executar: async (ctx, r) => {
+      const token = await ctx.tokenDeProvedor(ctx.cliente('principal'), 'catalog.read');
+      const precos = (await todasAsPaginas(ctx, token, 'ChargeItemDefinition?_count=100')).recursos;
+      const permitidos = new Set(['http://terminology.hl7.org/CodeSystem/usage-context-type|venue', 'https://fhir-brasil.dev.br/CodeSystem/lab-price-context|brand']);
+      const problemas: string[] = [];
+      let contextos = 0;
+      for (const p of precos) {
+        for (const u of lista(p.useContext)) {
+          contextos++;
+          const code = u.code as { system?: string; code?: string } | undefined;
+          if (!permitidos.has(`${code?.system}|${code?.code}`)) problemas.push(`${p.id}: contexto ${code?.system}|${code?.code}`);
+          if (typeof (u.valueReference as { reference?: unknown } | undefined)?.reference !== 'string') problemas.push(`${p.id}: contexto sem valueReference.reference`);
+        }
+        for (const j of lista(p.jurisdiction)) {
+          if (!lista(j.coding).some((x) => x.system && x.code)) problemas.push(`${p.id}: jurisdiction sem coding com system e code`);
+        }
+      }
+      esperar(problemas.length === 0, problemas.slice(0, 5).join('; '));
+      r.evidencia(`${precos.length} preços, ${contextos} contextos, todos venue ou brand com referência`);
+    },
+  },
+  {
     id: 'UNI-001',
     titulo: 'Location com status, address-city, address-state e _lastUpdated',
     executar: async (ctx, r) => {

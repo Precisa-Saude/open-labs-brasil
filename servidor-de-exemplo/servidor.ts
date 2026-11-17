@@ -29,6 +29,11 @@ export const SUITES_TLS12 = [
 
 const SUITES_FRACAS = 'AES128-SHA:AES256-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:AES128-GCM-SHA256:ECDHE-RSA-CHACHA20-POLY1305';
 
+/** Retry-After da manutenção simulada. Na revogação, nunca acima de 86400 (seção 6.5, ERR-007). */
+function esperaDeManutencao(provedor: Provedor): string {
+  return provedor.violacao('retry-after-longo') ? '172800' : '30';
+}
+
 export interface ServidorEmExecucao {
   provedor: Provedor;
   enderecos: { publico: string; mtls: string; controle?: string };
@@ -99,10 +104,10 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
     const fhir = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
     if (provedor.emManutencao) {
       if (['/par', '/token', '/revoke'].includes(url.pathname)) {
-        return enviarJson(res, 503, { error: 'temporarily_unavailable', error_description: 'manutenção simulada' }, provedor.violacao('sem-retry-after') ? { 'Cache-Control': 'no-store' } : { 'Retry-After': '30', 'Cache-Control': 'no-store' });
+        return enviarJson(res, 503, { error: 'temporarily_unavailable', error_description: 'manutenção simulada' }, provedor.violacao('sem-retry-after') ? { 'Cache-Control': 'no-store' } : { 'Retry-After': esperaDeManutencao(provedor), 'Cache-Control': 'no-store' });
       }
       return comTratamentoDeErros(provedor, req, res, async () => {
-        throw new ErroDeApi(503, 'PROVIDER_UNAVAILABLE', 'transient', 'Provedor em manutenção (simulada).', { cabecalhos: provedor.violacao('sem-retry-after') ? {} : { 'Retry-After': '30' } });
+        throw new ErroDeApi(503, 'PROVIDER_UNAVAILABLE', 'transient', 'Provedor em manutenção (simulada).', { cabecalhos: provedor.violacao('sem-retry-after') ? {} : { 'Retry-After': esperaDeManutencao(provedor) } });
       });
     }
     if (url.pathname === '/par') return tratarPar(provedor, req, res);

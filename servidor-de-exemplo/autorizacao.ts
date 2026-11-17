@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ESCOPOS_DE_PACIENTE, ESCOPOS_DE_PROVEDOR, TODOS_OS_ESCOPOS, type Escopo } from '../comum/registro.ts';
+import { cpfValido } from '../comum/cpf.ts';
 import { autenticarCliente } from './autenticacao.ts';
 import { PACIENTES, SENHA_DE_TESTE, type Paciente } from './dados.ts';
 import { enviarHtml, enviarJson, enviarVazio, ErroOAuth, lerCorpo, lerFormulario, novoId, tipoDoConteudo } from './http.ts';
@@ -148,6 +149,12 @@ function pedidoParaAutorizar(provedor: Provedor, clientId: string | undefined, r
   return par;
 }
 
+/** CPF válido pela seção 4.4: sem ele (ou com 00000000000) o paciente é tratado como sem CPF (T5). */
+function cpfDoCadastroValido(provedor: Provedor, paciente: Paciente): boolean {
+  if (provedor.violacao('cpf-invalido-aceito')) return Boolean(paciente.cpf);
+  return cpfValido(paciente.cpf);
+}
+
 export function autenticarPaciente(usuario: string | undefined, senha: string | undefined): Paciente | undefined {
   const p = PACIENTES.find((x) => x.usuario === usuario?.trim().toLowerCase());
   return p && senha === SENHA_DE_TESTE ? p : undefined;
@@ -182,11 +189,11 @@ export function concluirAutorizacao(provedor: Provedor, par: PedidoPar, paciente
     const codigo = provedor.emitirCodigo(par, c);
     return redirecionar(provedor, par, { code: codigo.code });
   }
-  if (!paciente.cpf) {
+  if (!cpfDoCadastroValido(provedor, paciente)) {
     provedor.transicionar(c, 'REJECTED', 'PATIENT_WITHOUT_CPF', 'SYSTEM');
     return redirecionar(provedor, par, { error: 'access_denied' });
   }
-  c.paciente = { cpf: paciente.cpf, fhirId: paciente.id };
+  c.paciente = { cpf: paciente.cpf!, fhirId: paciente.id };
   if (decisao === 'recusar') {
     provedor.transicionar(c, 'REJECTED', 'PATIENT_REJECTED', 'PROVIDER');
     return redirecionar(provedor, par, { error: 'access_denied' });
@@ -223,7 +230,7 @@ export async function tratarAutorizacao(provedor: Provedor, req: IncomingMessage
         return enviarHtml(res, 200, paginaDeLogin(url.pathname, { transacao: transacao.id }, 'Usuário ou senha incorretos.'));
       }
       transacao.pacienteId = paciente.id;
-      if (!paciente.cpf) {
+      if (!cpfDoCadastroValido(provedor, paciente)) {
         provedor.transacoes.delete(transacao.id);
         const r = concluirAutorizacao(provedor, par, paciente, 'recusar');
         return enviarVazio(res, r.status, { Location: r.location });
@@ -298,7 +305,8 @@ export async function tratarToken(provedor: Provedor, req: IncomingMessage, res:
     }
 
     if (grantType === 'authorization_code') {
-      if (modo !== 'normal') throw new ErroOAuth(400, 'unauthorized_client', 'registro de participantes expirado');
+      // Inclusive de jornada aberta antes do vencimento (seção 8.3, REG-013).
+      if (modo !== 'normal' && !provedor.violacao('troca-de-codigo-com-registro-expirado')) throw new ErroOAuth(400, 'unauthorized_client', 'registro de participantes expirado');
       const code = valor(form, 'code', true)!;
       const redirectUri = valor(form, 'redirect_uri', true)!;
       const verificador = valor(form, 'code_verifier', true)!;

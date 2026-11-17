@@ -321,9 +321,11 @@ function linkDaPagina(provedor: Provedor, tipo: string, parametros: URLSearchPar
   const p = new URLSearchParams();
   for (const [k, v] of parametros) if (k !== '_getpagesoffset') p.append(k, v);
   p.append('_getpagesoffset', String(deslocamento));
-  const base = provedor.violacao('paginacao-fora-da-base')
+  if (provedor.violacao('paginacao-relativa')) return `?${p.toString()}`;
+  let base = provedor.violacao('paginacao-fora-da-base')
     ? 'https://paginas.outro-dominio.example/fhir/r4'
     : provedor.fhirBaseUrl.replace(/\/$/, '');
+  if (provedor.violacao('paginacao-com-usuario')) base = base.replace('https://', 'https://usuario@');
   return `${base}/${tipo}?${p.toString()}`;
 }
 
@@ -430,7 +432,7 @@ export function capacidades(provedor: Provedor): Recurso {
     date: '2026-11-16',
     publisher: 'Open Labs Brasil (servidor de exemplo)',
     kind: 'instance',
-    software: { name: 'Servidor de exemplo do Open Labs Brasil', version: '0.2.1' },
+    software: { name: 'Servidor de exemplo do Open Labs Brasil', version: '0.2.2' },
     implementation: { description: 'Provedor de dados simulado, com dados sintéticos', url: provedor.fhirBaseUrl },
     fhirVersion: '4.0.1',
     format: ['json'],

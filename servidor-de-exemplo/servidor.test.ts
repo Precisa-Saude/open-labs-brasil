@@ -11,11 +11,14 @@ import { DadosSinteticos, PACIENTES, type Registro } from './dados.ts';
 
 describe('dados sintéticos', () => {
   it('pacientes com CPF ou CNS fictícios de dígitos válidos', () => {
-    for (const p of PACIENTES) {
+    for (const p of PACIENTES.filter((x) => x.usuario !== 'diego')) {
       if (p.cpf) expect(cpfValido(p.cpf)).toBe(true);
       else expect(cnsValido(p.cns!)).toBe(true);
     }
     expect(PACIENTES.some((p) => !p.cpf)).toBe(true);
+    // Paciente de CNS-025: CPF de preenchimento, que passa nos dígitos e é inválido pela seção 4.4.
+    expect(PACIENTES.find((p) => p.usuario === 'diego')?.cpf).toBe('00000000000');
+    expect(cpfValido('00000000000')).toBe(false);
   });
 
   it('todo recurso servível declara o perfil e tem as cardinalidades mínimas', () => {

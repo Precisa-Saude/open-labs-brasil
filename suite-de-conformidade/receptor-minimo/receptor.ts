@@ -143,6 +143,8 @@ export class ReceptorMinimo {
     const versao = versaoEfetiva(this.eu.protocol_versions, this.provedor.protocol_versions);
     if (!versao) throw new Error('Sem versão de protocolo efetiva com o provedor: ele não é oferecido ao paciente');
     if (this.provedor.status !== 'active') throw new Error('Provedor fora de active no registro');
+    const major = versao.split('.')[0]!;
+    if (!this.apiBase.endsWith(`/v${major}`)) throw new Error(`api_base_url não termina em /v${major}: sem comunicação (RCP-046)`);
     const r = await this.requisitar(urlDosMetadados(this.provedor.provider!.issuer), { semCertificado: true });
     if (r.status !== 200) throw new Error(`Metadados indisponíveis: ${r.status}`);
     const m = r.json as Json;
@@ -205,8 +207,12 @@ export class ReceptorMinimo {
   async buscarTudo(token: string, caminho: string): Promise<Json[]> {
     const itens: Json[] = [];
     let url: string | undefined = `${this.fhirBase}/${caminho}`;
+    let anterior: string | undefined;
     while (url) {
-      if (!dentroDaBase(url, this.fhirBase)) throw new Error(`Link de paginação fora do fhir_base_url: ${url}`);
+      // Link relativo resolvido contra a URL da requisição; componente de usuário recusado (RCP-043, RCP-051).
+      if (!dentroDaBase(url, this.fhirBase, anterior)) throw new Error(`Link de paginação fora do fhir_base_url: ${url}`);
+      url = anterior ? new URL(url, anterior).toString() : url;
+      anterior = url;
       const r = await this.api('GET', url, token);
       if (r.status !== 200) throw new Error(`Busca ${caminho} falhou: ${r.status} ${r.texto}`);
       const b = r.json as { entry?: Array<{ resource: Json; search?: { mode?: string } }>; link?: Array<{ relation: string; url: string }> };
@@ -236,7 +242,14 @@ export class ReceptorMinimo {
   precoNaUnidade(exame: Json, precos: Json[], unidade: Json, municipio?: string): number | undefined {
     const chave = (c: { system?: string; code?: string }) => `${c.system}|${c.code}`;
     const codigos = new Set(((exame.code as Json).coding as Array<{ system?: string; code?: string }>).map(chave));
-    const doExame = precos.filter((p) => ((p.code as Json).coding as Array<{ system?: string; code?: string }>).some((c) => codigos.has(chave(c))));
+    // Contexto não reconhecido: o preço não vale como geral nem em unidade nenhuma (RCP-049).
+    const reconhecido = (p: Json) =>
+      ((p.useContext as Array<{ code?: { system?: string; code?: string }; valueReference?: { reference?: string } }> | undefined) ?? []).every(
+        (u) => typeof u.valueReference?.reference === 'string' &&
+          ((u.code?.system === 'http://terminology.hl7.org/CodeSystem/usage-context-type' && u.code.code === 'venue') ||
+            (u.code?.system === 'https://fhir-brasil.dev.br/CodeSystem/lab-price-context' && u.code.code === 'brand')),
+      ) && ((p.jurisdiction as Array<{ coding?: Array<{ system?: string; code?: string }> }> | undefined) ?? []).every((j) => (j.coding ?? []).some((c) => c.system && c.code));
+    const doExame = precos.filter((p) => reconhecido(p) && ((p.code as Json).coding as Array<{ system?: string; code?: string }>).some((c) => codigos.has(chave(c))));
     const valor = (p: Json) => (((p.propertyGroup as Json[])[0]!.priceComponent as Json[]).find((x) => x.type === 'base')!.amount as { value: number }).value;
     const contextos = (p: Json) => ((p.useContext as Array<{ valueReference?: { reference?: string } }> | undefined) ?? []).map((u) => u.valueReference?.reference);
     const ref = `Location/${String(unidade.id)}`;
@@ -272,6 +285,9 @@ export class ReceptorMinimo {
 
   /** Cria o consentimento sem identificar o paciente (RCP-011) e faz o PAR com PKCE novo (RCP-004). */
   async iniciarConexao(cpfDoPaciente: string, escopos = ['appointment.write', 'results.read', 'consent.read'], finalidade = 'Reunir seus resultados de exames e agendar exames quando você pedir.'): Promise<JornadaAberta> {
+    // CPF do paciente inválido: a jornada não começa (RCP-042). Registro expirado: idem (seção 8.3).
+    if (!cpfValido(cpfDoPaciente.replace(/\D/g, ''))) throw new Error('CPF do paciente inválido: a jornada não começa');
+    if (this.registroExpirado()) throw new Error('Registro local expirado: a jornada não começa');
     const token = await this.tokenDeProvedor('consent.manage');
     const expira = new Date(Date.now() + 180 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
     const c = await this.api('POST', `${this.apiBase}/consents`, token, { corpo: { scopes: escopos, purpose: finalidade, expiration_date_time: expira } });
@@ -312,6 +328,7 @@ export class ReceptorMinimo {
     if (u.searchParams.get('error')) return { ok: false, motivo: 'RECUSADO_PELO_PACIENTE', detalhe: u.searchParams.get('error')! };
     const code = u.searchParams.get('code');
     if (!code) return { ok: false, motivo: 'RESPOSTA_INVALIDA', detalhe: 'sem code' };
+    if (this.registroExpirado()) return { ok: false, motivo: 'RESPOSTA_INVALIDA', detalhe: 'registro local expirado: o código não é trocado (RCP-047)' };
     const t = await this.postOAuth('token_endpoint', {
       grant_type: 'authorization_code',
       code,
@@ -407,8 +424,9 @@ export class ReceptorMinimo {
 
   /** Só a extensão de URL canônica, e só https (RCP-035). */
   linkDePagamento(agendamento: Json): string | undefined {
-    const ext = ((agendamento.extension as Json[] | undefined) ?? []).find((e) => e.url === 'https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link');
-    const link = ext?.valueUrl;
+    const extensoes = ((agendamento.extension as Json[] | undefined) ?? []).filter((e) => e.url === 'https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link');
+    if (extensoes.length !== 1) return undefined; // mais de uma: nenhum link é aberto (RCP-044)
+    const link = extensoes[0]!.valueUrl;
     return typeof link === 'string' && link.startsWith('https://') ? link : undefined;
   }
 
@@ -431,32 +449,62 @@ export class ReceptorMinimo {
 
   // Revogação (fluxo 2.6) -----------------------------------------------------------
 
+  registroExpirado(): boolean {
+    return Date.parse(this.cfg.registro.expires_at) <= Date.now();
+  }
+
   /**
-   * Descarta os tokens antes de chamar o provedor (RCP-017), faz no máximo três
-   * tentativas com recuo e Retry-After (RCP-028) e trata 404 e 422 como
-   * concluída (RCP-029). Sem sucesso, a revogação fica pendente (aqui, só em
-   * memória).
+   * Descarta os tokens e grava a revogação antes de chamar o provedor
+   * (RCP-017, RCP-038; aqui o registro é só em memória). Até três tentativas
+   * com recuo e Retry-After limitado a 24 horas (RCP-028, RCP-041, RCP-050);
+   * falha que não admite repetição encerra na hora (RCP-040); 404 só conclui
+   * com CONSENT_NOT_FOUND (RCP-039); provedor fora de active não é chamado
+   * (RCP-048). Sem confirmação, a revogação fica pendente.
    */
   async revogar(v: Vinculo, motivo = 'PATIENT_REQUEST'): Promise<'revogado' | 'pendente'> {
     delete v.accessToken;
     delete v.refreshToken;
     v.acessoExpiraEm = 0;
+    const pedido = { consentId: v.consentId, motivo, desde: Date.now() };
+    this.revogacoesPendentes.push(pedido);
+    const concluir = () => {
+      this.revogacoesPendentes.splice(this.revogacoesPendentes.indexOf(pedido), 1);
+      return 'revogado' as const;
+    };
+    if (this.provedor.status !== 'active' || this.registroExpirado() && Date.parse(this.cfg.registro.expires_at) + 7 * 86_400_000 <= Date.now()) return 'pendente';
+    const TETO_MS = 30_000;
     let espera = 1000;
     for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      let token: string;
       try {
-        const token = await this.tokenDeProvedor('consent.manage');
-        const r = await this.api('DELETE', `${this.apiBase}/consents/${v.consentId}?reason=${motivo}`, token);
-        if (r.status === 204 || r.status === 404 || r.status === 422) return 'revogado';
-        if (r.status < 500 && r.status !== 429) break;
-        const ra = Number(Array.isArray(r.cabecalhos['retry-after']) ? r.cabecalhos['retry-after'][0] : r.cabecalhos['retry-after']);
-        if (ra > 0) espera = Math.max(espera, ra * 1000);
-      } catch {
-        // falha de rede: tenta de novo
+        token = await this.tokenDeProvedor('consent.manage');
+      } catch (e) {
+        if (/invalid_client|unauthorized_client|recusado: 4(?!29)/.test((e as Error).message)) return 'pendente';
+        token = '';
+      }
+      if (token) {
+        try {
+          const r = await this.api('DELETE', `${this.apiBase}/consents/${v.consentId}?reason=${motivo}`, token);
+          const codigo = (r.json as { issue?: Array<{ details?: { coding?: Array<{ system?: string; code?: string }> } }> } | undefined)
+            ?.issue?.[0]?.details?.coding?.find((c) => c.system === 'urn:open-labs-brasil:error-code')?.code;
+          if (r.status === 204 || (r.status === 422 && codigo === 'CONSENT_INVALID_STATE') || (r.status === 404 && codigo === 'CONSENT_NOT_FOUND')) return concluir();
+          const repetivel = r.status === 429 || r.status >= 500 || (r.status === 401 && codigo === 'TOKEN_INVALID');
+          if (!repetivel) return 'pendente';
+          if (codigo === 'TOKEN_INVALID') this.tokensDeProvedor.delete('consent.manage');
+          const bruto = r.cabecalhos['retry-after'];
+          const ra = Number(Array.isArray(bruto) ? bruto[0] : bruto);
+          if (ra > 0) {
+            const pedidoMs = Math.min(ra, 86_400) * 1000;
+            if (pedidoMs > TETO_MS) return 'pendente';
+            espera = Math.max(espera, pedidoMs);
+          }
+        } catch {
+          // falha de rede: admite repetição
+        }
       }
       if (tentativa < 3) await new Promise((res) => setTimeout(res, espera));
       espera *= 2;
     }
-    this.revogacoesPendentes.push({ consentId: v.consentId, motivo, desde: Date.now() });
     return 'pendente';
   }
 }

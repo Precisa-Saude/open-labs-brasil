@@ -300,6 +300,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
       },
       outro: { usuario: bruno.usuario, senha: SENHA_DE_TESTE, cpf: bruno.cpf, fhir_id: bruno.id },
       sem_cpf: { usuario: 'carla', senha: SENHA_DE_TESTE },
+      cpf_invalido: { usuario: 'diego', senha: SENHA_DE_TESTE },
     },
     agenda: {
       unidade: `Location/${FIXTURAS.unidadeDosTestes}`,

@@ -186,11 +186,12 @@ export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise
   passos.push('V2');
   const [cabecalhoB64, , assinaturaB64] = partes as [string, string, string];
 
-  // V3: alg PS256.
+  // V3: alg PS256 e sem crit. typ e outros membros são ignorados, e nenhum deles serve para obter a chave.
   const cabecalho = decodificarCabecalho(cabecalhoB64);
   if (!cabecalho || cabecalho.alg !== 'PS256') {
     return recusa('V3', `algoritmo do cabeçalho diferente de PS256: ${String(cabecalho?.alg)}`);
   }
+  if ('crit' in cabecalho && !pular.has('V3')) return recusa('V3', 'cabeçalho com crit');
   passos.push('V3');
 
   // V4: kid entre as chaves confiáveis (do documento N, nunca do candidato).
@@ -209,7 +210,9 @@ export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise
   try {
     const chavePublica = await importJWK({ kty: chave.kty, n: chave.n, e: chave.e }, 'PS256');
     const jwsAnexado = `${cabecalhoB64}.${base64url.encode(entrada.bytes)}.${assinaturaB64}`;
-    await compactVerify(jwsAnexado, chavePublica, { algorithms: ['PS256'] });
+    // Só no modo de violações (V3 pulado): a biblioteca também recusaria crit desconhecido, então ela é instruída a aceitá-lo.
+    const crit = pular.has('V3') && Array.isArray(cabecalho.crit) ? Object.fromEntries((cabecalho.crit as string[]).map((n) => [n, true])) : undefined;
+    await compactVerify(jwsAnexado, chavePublica, { algorithms: ['PS256'], ...(crit ? { crit } : {}) });
   } catch {
     if (!pular.has('V6')) return recusa('V6', 'assinatura não verifica');
   }
