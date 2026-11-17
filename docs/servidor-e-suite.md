@@ -36,7 +36,7 @@ Outros comandos:
 | `pnpm suite --config <arquivo>` | Roda a suíte contra o provedor da configuração. `--somente AUT-001,CNS-002` filtra, `--relatorio arquivo.json` grava o resultado |
 | `pnpm typecheck` | Confere os tipos com o TypeScript em modo estrito |
 | `pnpm docs:links` | Confere que todo link relativo dos arquivos Markdown resolve |
-| `pnpm verificar` | Os quatro acima em sequência: tipos, testes, suíte local e links |
+| `pnpm verificar` | Os quatro acima em sequência: tipos, testes, suíte local e links. É o que a CI roda em todo PR e em todo push no ramo principal (`.github/workflows/ci.yml`), no Node 22.18 e no 24 |
 
 ## Ambiente local
 
