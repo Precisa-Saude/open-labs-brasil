@@ -232,7 +232,8 @@ export const testesDeResultadosEErros: Teste[] = [
       const cpfs = [ctx.cfg.pacientes.principal.cpf, ctx.cfg.pacientes.outro?.cpf].filter((x): x is string => Boolean(x));
       const segredos = [...ctx.segredosVistos].filter((s) => s.length >= 16);
       const erros = ctx.http.historico.filter((t) => t.status >= 400);
-      const pilha = /\bat [^\n]+\(?[^\s]+:\d+:\d+\)?|Error: [^\n]*\n\s+at /;
+      // Linha de pilha do V8, do Java ou do .NET: "at função (arquivo:linha:coluna)", "at pacote.Classe(Arquivo.java:12)".
+      const pilha = /(?:^|\\n|\n)\s*at [\w$.<>[\]]+ ?\(?[^\s()]+:\d+(?::\d+)?\)?/;
       for (const t of erros) {
         for (const cpf of cpfs) if (t.texto.includes(cpf)) falhar(`CPF de paciente em resposta de erro: ${t.metodo} ${t.url} ${t.status}`);
         for (const s of segredos) if (t.texto.includes(s)) falhar(`token em resposta de erro: ${t.metodo} ${t.url} ${t.status}`);
