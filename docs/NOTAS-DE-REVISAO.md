@@ -2,7 +2,9 @@
 
 Para: Rafael. Quarta rodada, 2026-11-17: versão 0.2.2, que decide os catorze pontos em que o cliente receptor atualizado para a 0.2.1 achou o texto ambíguo, omisso ou incoerente. A seção A é desta rodada. A seção 0 é da terceira rodada (0.2.1), e as seções 1 a 9 são da segunda (0.2.0), atualizadas onde as rodadas seguintes as alteraram.
 
-Este arquivo é de trabalho. Ele registra o que foi decidido, o que mudou nesta rodada, o que continua pendente e o que não foi verificado. Deve sair do repositório, ou ser limpo, antes de o repositório se tornar público. Nada foi implementado nem testado contra um laboratório.
+Este arquivo é de trabalho. Ele registra o que foi decidido, o que mudou em cada rodada, o que continua pendente e o que não foi verificado. Nada foi testado contra um laboratório.
+
+O repositório é público, e estas notas ficam à vista de propósito: as ressalvas da seção 4, a lista de itens não verificados da seção 5 e as questões em aberto da seção 6 interessam a quem avalia o protocolo. As seções de rodadas anteriores não foram reescritas. Onde elas falam em repositório privado, em ausência de implementação de referência ou em contato de segurança por definir, descrevem a situação daquela rodada. O contato de segurança hoje está em [SECURITY.md](../SECURITY.md), e o servidor de exemplo e a suíte, em [servidor-e-suite.md](servidor-e-suite.md).
 
 ## Sumário
 
