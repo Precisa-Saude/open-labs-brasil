@@ -2,7 +2,7 @@
 
 Gerado por `node ferramentas/gerar-cobertura.ts` a partir de [09-versionamento-e-conformidade.md](../especificacao/09-versionamento-e-conformidade.md), da lista de testes da suíte e do relatório de `pnpm conformidade:local`. Não edite à mão: rode os dois comandos de novo.
 
-Relatório usado: 2026-11-17T01:30:48.379Z. Contra o servidor de exemplo: 120 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 124 requisitos de provedor.
+Relatório usado: 2026-11-17T03:08:17.787Z. Contra o servidor de exemplo: 128 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 132 requisitos de provedor.
 
 Colunas:
 
@@ -24,6 +24,9 @@ Colunas:
 | REG-008 | Depois de `expires_at` sem documento novo, recusa PAR, criação de consentimento e `client_credentials` de catálogo, unidades e agenda. Por 7 dias, aceita `client_credentials` com `consent.manage` como único escopo e atende `GET` e `DELETE` de consentimento. Depois dos 7 dias, recusa também | `registro.ts`, fase relogio | aprovado | `registro-expirado-sem-modo-restrito` |
 | REG-009 | Calcula a versão efetiva pela regra da seção 9.1 e não se comunica com participante sem versão efetiva | `registro.ts`, fase registro | aprovado | `aceita-cliente-suspenso` |
 | REG-010 | Enquanto o MAJOR for 0, lista exatamente uma versão em `protocol_versions` | `registro.ts` | aprovado |  |
+| REG-011 | Na verificação do registro, ignora `typ` e os membros do cabeçalho protegido além de `alg` e `kid`, não usa nenhum deles para obter a chave, e recusa o candidato que traz `crit` | `registro.ts`, fase registro | aprovado | `registro-aceita-crit`, `registro-exige-typ-jose`, `registro-usa-jwk-do-cabecalho` |
+| REG-012 | Trata como inexistente a versão efetiva que o próprio software não implementa, e não se comunica com a outra ponta nesse caso | `registro.ts`, fase registro | aprovado | `versao-nao-implementada-aceita` |
+| REG-013 | Com o registro expirado, o provedor recusa a concessão `authorization_code` com `unauthorized_client`, inclusive de jornada aberta antes do vencimento | `registro.ts`, fase relogio | aprovado | `troca-de-codigo-com-registro-expirado` |
 | SEG-001 | Recusa TLS abaixo de 1.2 em todos os endpoints | `seguranca.ts` | aprovado | `aceita-tls-1-1` |
 | SEG-002 | No TLS 1.2, os endpoints entre servidores aceitam somente as quatro suítes da seção 7.5 | `seguranca.ts` | aprovado | `tls-com-suites-fracas` |
 | SEG-003 | Exige certificado de cliente em PAR, token, consentimento e API FHIR | `seguranca.ts` | aprovado | `aceita-sem-certificado` |
@@ -83,6 +86,8 @@ Colunas:
 | CNS-022 | Estados finais não mudam | `consentimento.ts`, fase relogio | aprovado |  |
 | CNS-023 | Oferece página de gestão de consentimentos em `consent_management_uri`, com revogação | `consentimento.ts` | não verificável automaticamente: listar os consentimentos AUTHORISED e revogar cada um pede inspeção humana da página |  |
 | CNS-024 | `GET /consents/{id}` com token de provedor responde para consentimento em estado final | `consentimento.ts` | aprovado | `estado-final-ilegivel` |
+| CNS-025 | Paciente cujo CPF no cadastro não é válido pela regra da seção 4.4 (dígitos verificadores errados, ou onze algarismos iguais) é tratado como paciente sem CPF: `access_denied` e `REJECTED` com `PATIENT_WITHOUT_CPF` | `consentimento.ts` | aprovado | `cpf-invalido-aceito` |
+| CNS-026 | `DELETE` repetido ou concorrente do mesmo consentimento aplica a transição uma única vez, mantém o `status_reason` da primeira chamada e responde a cada uma com 204 ou 422 `CONSENT_INVALID_STATE`, nunca 409 nem 5xx | `consentimento.ts` | aprovado | `revogacao-repetida-aceita`, `revogacao-repetida-sobrescreve` |
 | API-001 | Recusa requisição sem `x-fapi-interaction-id` com 400 e devolve o cabeçalho em toda resposta | `api.ts`, fase final | aprovado | `sem-interaction-id` |
 | API-002 | Recusa token no parâmetro de consulta | `api.ts` | aprovado | `token-na-url` |
 | API-003 | Recusa token sem o escopo do recurso com 403 e `insufficient_scope` | `api.ts` | aprovado | `escopo-nao-conferido` |
@@ -95,10 +100,12 @@ Colunas:
 | API-010 | Toda resposta 4xx e 5xx traz `OperationOutcome` com um código de `urn:open-labs-brasil:error-code` | `api.ts`, fase final | aprovado | `erro-sem-operation-outcome` |
 | API-011 | Leitura por id de recurso de outro paciente devolve 404 | `api.ts` | aprovado | `paciente-de-outro-visivel` |
 | API-012 | Todo `link` de paginação fica dentro do `fhir_base_url` do registro | `api.ts` | aprovado | `paginacao-fora-da-base` |
+| API-013 | Todo `link` de paginação é URL absoluta com esquema `https` e sem componente de usuário | `api.ts` | aprovado | `paginacao-relativa`, `paginacao-com-usuario` |
 | CAT-001 | Suporta `ActivityDefinition` com `status`, `url`, `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `busca-por-url-ignorada` |
 | CAT-002 | Suporta `ChargeItemDefinition` com `status`, `url`, `jurisdiction`, `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `busca-por-url-ignorada` |
 | CAT-003 | Item retirado continua legível com `status` igual a `retired` e aparece na busca por `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `retirado-invisivel` |
 | CAT-004 | Todo `ChargeItemDefinition` ativo tem `code` igual ao de algum `ActivityDefinition` | `catalogo-e-agenda.ts` | aprovado | `preco-sem-exame` |
+| CAT-005 | Em `ChargeItemDefinition.useContext`, usa só os contextos `venue` e `brand` da seção 5.5.2, cada um com `valueReference.reference` | `catalogo-e-agenda.ts` | aprovado | `contexto-de-preco-desconhecido` |
 | UNI-001 | Suporta `Location` com `status`, `address-city`, `address-state`, `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `busca-por-cidade-ignorada` |
 | UNI-002 | Suporta `HealthcareService` com `location`, `active`, `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `servicos-de-todas-as-unidades` |
 | AGE-001 | Atende `Schedule` e `Slot` com token de provedor que tem `schedule.read`, sem consentimento e sem dado de paciente | `catalogo-e-agenda.ts` | aprovado | `agenda-exige-paciente` |
@@ -139,6 +146,7 @@ Colunas:
 | ERR-004 | Nenhuma resposta de erro contém dado pessoal, CPF, token ou rastro de pilha | `resultados-e-erros.ts`, fase final | aprovado | `cpf-no-erro` |
 | ERR-005 | 429 e 503 trazem `Retry-After` | `resultados-e-erros.ts` | aprovado | `sem-retry-after` |
 | ERR-006 | Respostas de erro do endpoint de autorização trazem `iss` | `resultados-e-erros.ts` | aprovado | `iss-ausente-na-resposta` |
+| ERR-007 | Nas respostas ao `DELETE` de consentimento e ao pedido de token `client_credentials` com `consent.manage`, `Retry-After` não passa de 86400 segundos | `resultados-e-erros.ts` | aprovado | `retry-after-longo` |
 
 ## Receptor
 
@@ -174,7 +182,7 @@ Os requisitos RCP são do receptor e ficam fora desta entrega: testá-los pede u
 | RCP-026 | Ignora campos desconhecidos em respostas | fora desta entrega |  |
 | RCP-027 | Quando a conferência do titular não pode ser feita (a leitura do consentimento falha depois das tentativas, ou vem sem `patient.cpf` válido), não conclui o vínculo, não chama a API FHIR, descarta os tokens e revoga com `reason=RECEIVER_TERMINATION` | fora desta entrega | segue |
 | RCP-028 | Na revogação, faz no máximo três tentativas automáticas seguidas, respeitando `Retry-After`. Persistindo a falha, grava a revogação como pendente em armazenamento durável, repete conforme o calendário da seção 4.4 e mostra a pendência ao paciente com o endereço da página do provedor | fora desta entrega | segue |
-| RCP-029 | Trata 404 `CONSENT_NOT_FOUND` e 422 `CONSENT_INVALID_STATE` na revogação como revogação concluída | fora desta entrega | segue |
+| RCP-029 | Trata 404 `CONSENT_NOT_FOUND` e 422 `CONSENT_INVALID_STATE` na revogação como revogação concluída | fora desta entrega |  |
 | RCP-030 | Não segue `link` de paginação fora do `fhir_base_url` do provedor e não envia token nem certificado para esse endereço | fora desta entrega | segue |
 | RCP-031 | Recusa provedor cujos metadados não trazem, ou contradizem, um valor obrigatório da seção 5.2 | fora desta entrega | segue |
 | RCP-032 | Pede `consent.manage` sempre sozinho, sem outro escopo no mesmo token | fora desta entrega | segue |
@@ -183,3 +191,17 @@ Os requisitos RCP são do receptor e ficam fora desta entrega: testá-los pede u
 | RCP-035 | Lê o link de pagamento somente da extensão de URL canônica `payment-link` e só o abre se o esquema for `https` | fora desta entrega | segue |
 | RCP-036 | Envia `If-None-Exist` na forma literal `identifier={system}\\|{value}`, com `value` restrito ao conjunto de caracteres da seção 5.5.5 | fora desta entrega | segue |
 | RCP-037 | Calcula a versão efetiva pela regra da seção 9.1 e não oferece ao paciente provedor sem versão efetiva | fora desta entrega | segue |
+| RCP-038 | Grava a revogação em armazenamento durável no momento em que ela é decidida, antes da primeira tentativa, e um reinício durante as tentativas automáticas não a perde | fora desta entrega | segue |
+| RCP-039 | Só trata um 404 da revogação como conclusão quando o `OperationOutcome` traz o código `CONSENT_NOT_FOUND`. Um 404 sem esse código mantém a revogação pendente | fora desta entrega | segue |
+| RCP-040 | Diante de falha que não admite repetição na revogação (seção 4.4), encerra as tentativas automáticas na hora e mantém a revogação pendente | fora desta entrega | segue |
+| RCP-041 | Não faz tentativa de revogação, automática ou do calendário, antes do instante indicado por `Retry-After`, contado até no máximo 24 horas (RCP-050), e encerra as tentativas automáticas quando a espera passa do próprio teto | fora desta entrega | segue |
+| RCP-042 | Trata como inválido o CPF que não tem 11 dígitos com dígitos verificadores certos ou que tem onze algarismos iguais, tanto no `patient.cpf` recebido quanto no CPF do paciente que inicia a jornada. Com o CPF do paciente inválido, não inicia a jornada nem troca o código | fora desta entrega | segue |
+| RCP-043 | Não segue `link` de paginação com componente de usuário e não faz requisição fora do `fhir_base_url` a partir de link relativo | fora desta entrega | segue |
+| RCP-044 | Com mais de uma extensão `payment-link` no `Appointment`, não abre link nenhum | fora desta entrega | segue |
+| RCP-045 | No agendamento, identifica o paciente só pela referência `Patient/{fhir_id}`, sem `identifier`, no participante e no `subject` de cada pedido contido | fora desta entrega |  |
+| RCP-046 | Não oferece nem chama provedor cujo `api_base_url` não termina em `/v{M}` da versão efetiva | fora desta entrega | segue |
+| RCP-047 | Com o registro local expirado, não troca código de autorização, nem de jornada aberta antes do vencimento | fora desta entrega | segue |
+| RCP-048 | Não chama provedor que não está `active` no registro aceito, ou sem versão efetiva, nem para revogar. Mantém as revogações pendentes para ele à vista do paciente, com a página do provedor, e retoma o calendário quando ele volta a `active` | fora desta entrega | segue |
+| RCP-049 | Não trata como geral um preço que traz contexto de uso que o receptor não reconhece | fora desta entrega | segue |
+| RCP-050 | Na revogação, trata `Retry-After` maior que 24 horas como 24 horas e, passado esse prazo, retoma o calendário da seção 4.4 | fora desta entrega | segue |
+| RCP-051 | Resolve `link` de paginação relativo contra a URL da requisição que devolveu o Bundle e o segue quando a URL resultante passa nas conferências da seção 5.1 | fora desta entrega | segue |

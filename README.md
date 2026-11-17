@@ -68,7 +68,7 @@ Comece por [especificacao/00-indice.md](especificacao/00-indice.md). Quem vai av
 
 ## Ferramentas
 
-O servidor de exemplo implementa o lado do provedor da especificação 0.2.1, com dados sintéticos. A suíte de conformidade executa os 124 requisitos de provedor do capítulo 9 contra qualquer provedor apontado por configuração, e passa por inteiro contra o servidor de exemplo. Com Node 22.18 ou mais novo, pnpm e openssl:
+O servidor de exemplo implementa o lado do provedor da especificação 0.2.2, com dados sintéticos. A suíte de conformidade executa os 132 requisitos de provedor do capítulo 9 contra qualquer provedor apontado por configuração, e passa por inteiro contra o servidor de exemplo. Com Node 22.18 ou mais novo, pnpm e openssl:
 
 ```sh
 pnpm install

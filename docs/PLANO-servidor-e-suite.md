@@ -1,6 +1,6 @@
 # Plano: servidor de exemplo e suíte de conformidade
 
-Ticket: PRE-575. Versão da especificação: 0.2.1 (protocolo `0.2`, caminho `/v0`, formato do registro `0.1`).
+Ticket: PRE-575. Versão da especificação: 0.2.1, atualizada para 0.2.2 (PR #2) na seção "Atualização para a 0.2.2" no fim (protocolo `0.2`, caminho `/v0`, formato do registro `0.1`).
 
 Este arquivo define o que conta como pronto antes de qualquer código. Cada critério diz o comportamento observável, o comando que o prova e o que fica de fora. A situação de cada um é atualizada no fim, com a evidência.
 
@@ -104,3 +104,19 @@ Atualizada em 2026-11-16, no fim do trabalho, com a evidência de cada critério
 | 5. Jornada de ponta a ponta | Cumprido | `pnpm jornada`: 11 passos, de registro verificado até revogação com `PATIENT_MISMATCH`; `suite-de-conformidade/testes/jornada.test.ts` |
 | 6. Documentação | Cumprido | [servidor-e-suite.md](servidor-e-suite.md), [cobertura-de-requisitos.md](cobertura-de-requisitos.md), [pontos-da-especificacao.md](pontos-da-especificacao.md); `pnpm docs:links`: 107 links relativos, todos resolvem |
 | Verificações gerais | Cumprido | `pnpm verificar` (tipos, 115 testes, suíte local, links) termina com código 0. Suíte e jornada também passam no Node 22.23 |
+
+## Atualização para a 0.2.2
+
+Critérios, escritos antes da mudança, contra a 0.2.2 do PR #2 (commit `4c8cb76`), trazida para este ramo:
+
+| Critério | Prova | Situação |
+| --- | --- | --- |
+| Cada requisito de provedor novo (REG-011 a REG-013, CNS-025, CNS-026, API-013, CAT-005, ERR-007) tem teste na suíte | `suite-de-conformidade/testes/conformidade.test.ts` compara os 132 requisitos de provedor em vigor do capítulo 9 com os testes | Cumprido |
+| Cada um tem uma violação deliberada no servidor que o reprova | `suite-de-conformidade/testes/violacoes.test.ts`: 109 violações, 11 novas, todas reprovam o requisito pelo motivo esperado | Cumprido |
+| O servidor de exemplo cumpre a 0.2.2: `crit` recusado em V3 e `typ` e membros a mais ignorados; regra do schema para `protocol_versions`; CPF inválido no cadastro tratado como ausência (`PATIENT_WITHOUT_CPF`); links de paginação absolutos `https` sem usuário; versão efetiva que o software não implementa tratada como inexistente; troca de código recusada com o registro expirado; preço só com `venue` e `brand` com referência; `Retry-After` de no máximo 86400 na revogação | `pnpm conformidade:local` | Cumprido: 128 aprovados, 0 reprovados, 4 não verificáveis (os mesmos quatro da 0.2.1) |
+| O receptor mínimo segue as regras novas por onde a jornada passa (CPF válido, links relativos e com usuário, uma só extensão de pagamento, `/v{M}`, código não trocado com registro expirado, contexto de preço desconhecido, regras de repetição da revogação) | `pnpm jornada` | Cumprido |
+| Os 28 pontos de `docs/pontos-da-especificacao.md` conferidos contra a 0.2.2, numa lista só | `docs/pontos-da-especificacao.md`, seção "Situação de cada ponto na 0.2.2" | Cumprido |
+| Tabela de cobertura gerada de novo | `node ferramentas/gerar-cobertura.ts` | Cumprido |
+| Verificações gerais | `pnpm verificar`: tipos, 126 testes, suíte local, links | Cumprido |
+
+Fora do escopo desta atualização: os requisitos novos do receptor (RCP-038 a RCP-051), pelo mesmo motivo dos demais RCP.

@@ -1,6 +1,30 @@
 # Pontos da especificação encontrados na implementação
 
-Lista de trabalho, da implementação do servidor de exemplo e da suíte de conformidade contra a versão 0.2.1. Os capítulos da especificação não foram alterados. Em cada ponto, o servidor de exemplo seguiu a leitura mais conservadora, e a suíte não reprova um provedor que siga a outra leitura possível, salvo onde está dito.
+Lista de trabalho, da implementação do servidor de exemplo e da suíte de conformidade contra a versão 0.2.1, conferida depois contra a 0.2.2 (PR #2, commit `4c8cb76`). Os capítulos da especificação não foram alterados aqui. Em cada ponto, o servidor de exemplo seguiu a leitura mais conservadora, e a suíte não reprova um provedor que siga a outra leitura possível, salvo onde está dito.
+
+## Situação de cada ponto na 0.2.2
+
+Nenhum dos 28 pontos foi resolvido por inteiro pela 0.2.2. Dois foram em parte, e um ficou mais nítido. Os demais continuam em aberto, com a mesma leitura no servidor de exemplo.
+
+| # | Situação na 0.2.2 |
+| --- | --- |
+| 1 | **Em aberto, e mais nítido.** A tabela de 8.3 ainda diz que a renovação por refresh token "PODE continuar" nos 7 dias, e a regra logo abaixo agora diz que o provedor recusa "as demais concessões com `unauthorized_client`, inclusive `authorization_code`". 6.2.1 não mudou. O servidor continua recusando |
+| 2 | Em aberto. 5.3.4 e 3.3 continuam falando só da obrigação do receptor |
+| 3 a 18 | Em aberto. Nenhuma das seções citadas mudou nesses pontos. A 0.2.2 tocou 5.5.2 (contextos de preço) e 5.5.5 (paciente por referência, link de pagamento), mas não a região de preço (4), o número de horários (7), o exame fora do horário (8), a extensão enviada na criação (9) nem a ordem dos erros (10) |
+| 19 | **Resolvido em parte.** A 0.2.2 diz que o domínio do link de pagamento é obrigação do provedor (AGD-007) e que o receptor não confere, porque o registro não lista domínios. Do lado do provedor, "domínio do provedor" continua sem definição, e a suíte mantém a heurística |
+| 20 a 24 | Em aberto (testabilidade). REG-004, V5, REG-009 1.x, AGD-005 e o 503 de ERR-005 não mudaram. ERR-007, novo, também pede provocar 429 e 503 "no ambiente de teste" |
+| 25 | **Resolvido em parte.** A nota da quarta rodada em `docs/NOTAS-DE-REVISAO.md` agora diz que o Ajv acusa `strictRequired` com `strict: true` explícito. O schema continua com o mesmo padrão, e a validação aqui segue sem `strictRequired` |
+| 26 a 28 | Em aberto |
+
+Pontos novos, da implementação da 0.2.2:
+
+| # | Ponto | Onde | Leitura adotada |
+| --- | --- | --- | --- |
+| 29 | "Mantém o `status_reason` da primeira chamada" em `DELETE` concorrente: por fora, a primeira chamada não é observável | 4.4, CNS-026 | A suíte exige pelo menos um 204, nenhum 409 ou 5xx, e, quando só um `DELETE` recebe 204, que o motivo gravado seja o dele. No `DELETE` repetido em sequência, exige 422 e o motivo da primeira |
+| 30 | `crit` e bibliotecas JOSE | 8.3, REG-011 | O `jose` já recusa `crit` desconhecido na verificação da assinatura (V6), antes de qualquer conferência própria de V3. Um verificador baseado em biblioteca estabelecida cumpre REG-011 sem código a mais. A violação deliberada do servidor precisou instruir a biblioteca a aceitar a extensão |
+| 31 | Como testar REG-012 contra um provedor | 9.1, REG-012 | Exige mudar a entrada do próprio provedor no registro de teste. A suíte publica um candidato em que o provedor e o sentinela declaram `0.9`, observa a recusa do sentinela e restaura |
+| 32 | `api_base_url` terminado em `/v{M}` | 8.2, 9.1 | A 0.2.2 dá ao receptor a recusa (RCP-046), mas não há requisito de provedor sobre a própria entrada. A suíte confere a entrada do provedor dentro de REG-012 |
+| 33 | ERR-007 só é provocável se o provedor limita chamadas no `DELETE` ou tem um modo de indisponibilidade no ambiente de teste | 6.5, ERR-007 | Sem 429 nem 503 provocados, o teste termina não verificável |
 
 ## Contradições ou lacunas que mudam comportamento
 

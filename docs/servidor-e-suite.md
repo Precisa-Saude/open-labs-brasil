@@ -1,6 +1,6 @@
 # Servidor de exemplo e suíte de conformidade
 
-Ferramentas da especificação 0.2.1 (protocolo `0.2`). Código sob a Apache License 2.0 ([LICENSE](../LICENSE)), este texto sob a CC BY 4.0 ([LICENSE-spec](../LICENSE-spec)).
+Ferramentas da especificação 0.2.2 (protocolo `0.2`). Código sob a Apache License 2.0 ([LICENSE](../LICENSE)), este texto sob a CC BY 4.0 ([LICENSE-spec](../LICENSE-spec)).
 
 | Parte | Pasta | Para que serve |
 | --- | --- | --- |
@@ -103,6 +103,7 @@ A página de login lista os pacientes de teste. A senha de todos é `teste`.
 | `ana` | Ana Exemplo Sintética, `pac-ana` | 529.982.247-25 (o mesmo do exemplo da seção 5.4.2) | Paciente principal: laudos liberados, um parcial, um retido, um antigo, agendamento feito por outro canal |
 | `bruno` | Bruno Exemplo Sintético, `pac-bruno` | 111.444.777-35 | Outro paciente, para testes de isolamento e de CPF divergente |
 | `carla` | Carla Sem CPF Sintética, `pac-carla` | (sem CPF, CNS provisório) | Paciente sem CPF (T5, CNS-011) |
+| `diego` | Diego CPF Inválido Sintético, `pac-diego` | `00000000000` no cadastro | CPF de preenchimento, que passa nos dígitos e é inválido pela seção 4.4: tratado como sem CPF (CNS-025) |
 
 ### Dados sintéticos
 
@@ -128,7 +129,7 @@ Todas as chamadas levam `Authorization: Bearer {token}` (o `controle.token` da c
 
 ### Modo de violações
 
-`servidor-de-exemplo/violacoes.ts` lista 98 regras que o servidor pode quebrar de propósito, cada uma com os requisitos que ela viola. `node servidor-de-exemplo/principal.ts --listar-violacoes` mostra a lista, e `pnpm servidor -- --violacao par-sem-pkce` sobe o servidor com uma delas. O teste `suite-de-conformidade/testes/violacoes.test.ts` sobe o servidor com uma violação de cada vez e exige que a suíte reprove o requisito correspondente. É o que prova que a suíte não aprova qualquer coisa.
+`servidor-de-exemplo/violacoes.ts` lista 109 regras que o servidor pode quebrar de propósito, cada uma com os requisitos que ela viola. `node servidor-de-exemplo/principal.ts --listar-violacoes` mostra a lista, e `pnpm servidor -- --violacao par-sem-pkce` sobe o servidor com uma delas. O teste `suite-de-conformidade/testes/violacoes.test.ts` sobe o servidor com uma violação de cada vez e exige que a suíte reprove o requisito correspondente. É o que prova que a suíte não aprova qualquer coisa.
 
 ### Contêiner
 
@@ -150,7 +151,7 @@ pnpm suite --config ambiente-local/gerado/suite.config.json
 
 ### O que ela verifica
 
-Os requisitos de provedor do capítulo 9 (prefixos REG, SEG, AUT, CNS, API, CAT, UNI, AGE, AGD, RES e ERR): 124 em vigor. Cada um é um teste com o próprio identificador, que termina em:
+Os requisitos de provedor do capítulo 9 (prefixos REG, SEG, AUT, CNS, API, CAT, UNI, AGE, AGD, RES e ERR): 132 em vigor na 0.2.2. Cada um é um teste com o próprio identificador, que termina em:
 
 | Situação | Quando |
 | --- | --- |
@@ -159,6 +160,8 @@ Os requisitos de provedor do capítulo 9 (prefixos REG, SEG, AUT, CNS, API, CAT,
 | `não verificável automaticamente` | O requisito, ou parte dele, pede inspeção humana, o validador FHIR, ou um recurso que a configuração não tem (por exemplo a interface de controle). O motivo diz qual. Se uma parte verificável falha, o resultado é `reprovado` |
 
 Contra o servidor de exemplo, quatro ficam como não verificáveis: AUT-024, CNS-008 e CNS-023, que o capítulo 9 diz dependerem de olhar telas, e API-008, porque a validação completa contra os perfis pede o validador FHIR com o guia. A suíte confere o que dá para conferir nesses quatro (`meta.profile` e as cardinalidades mínimas de cada perfil; que login e consentimento ficam no domínio do provedor; que a tela de consentimento mostra o nome do receptor como está no registro e a finalidade sem alteração; que a página de consentimentos responde) e reprova se algo disso falha. Os textos dos escopos, a data de expiração e o aviso do CPF admitem redação do provedor e ficam para inspeção.
+
+Na 0.2.2 a suíte passou a conferir também: `crit` recusado e `typ` ou membros a mais aceitos no cabeçalho do registro (REG-011), versão efetiva que o software não implementa (REG-012), troca de código com o registro expirado (REG-013), CPF inválido no cadastro (CNS-025), `DELETE` repetido e concorrente (CNS-026), links de paginação absolutos `https` sem componente de usuário (API-013), contextos de preço (CAT-005) e o teto de 86400 segundos de `Retry-After` na revogação (ERR-007). Os links relativos que um provedor da 0.2.0 ou 0.2.1 ainda emita são resolvidos contra a URL da requisição antes da conferência de API-012, como a seção 5.1 manda ao receptor; a forma do link é API-013.
 
 Algumas conferências aceitam mais de uma resposta conforme: um token recusado depois de revogação ou expiração pode vir com `CONSENT_REVOKED`, `CONSENT_EXPIRED` ou `TOKEN_INVALID`, sempre com 401 e `invalid_token`; o relógio é adiantado dentro da validade do token, para que a recusa venha do consentimento e não do token vencido. SEG-002 oferece, uma de cada vez, todas as suítes TLS 1.2 que o OpenSSL do Node conhece, menos as quatro da seção 7.5, e só conta as que o cliente consegue oferecer.
 
@@ -173,7 +176,7 @@ A suíte faz o papel de receptores de teste registrados. Num ambiente de homolog
 3. **O `jwks_uri` dos clientes acessível ao provedor.** A suíte pode hospedá-lo (bloco `hospedagem`), ou o laboratório publica os arquivos onde preferir.
 4. **Pacientes de teste** no sistema do laboratório: um principal com CPF, outro com CPF diferente e um sem CPF, e os identificadores de alguns laudos.
 5. **Opcional, mas recomendado: a interface de controle de teste** descrita acima. Sem ela, todos os testes que precisam adiantar o relógio ou recarregar o registro terminam não verificáveis.
-6. **Para concluir a jornada do paciente**, uma de duas: login e consentimento em formulários HTML simples (`jornada_por_formulario`), que a suíte percorre como um navegador, ou a operação `jornada` da interface de controle. Com a interface de controle, os testes que olham o redirecionamento (AUT-012, AUT-013, AUT-025, ERR-006) dizem que ele foi informado pelo provedor, e não observado, e terminam não verificáveis. Contra o servidor de exemplo sem interface de controle, só com a jornada pelas páginas, a suíte termina com 103 aprovados e 21 não verificáveis; sem nenhuma das duas, com 54 aprovados e 70 não verificáveis.
+6. **Para concluir a jornada do paciente**, uma de duas: login e consentimento em formulários HTML simples (`jornada_por_formulario`), que a suíte percorre como um navegador, ou a operação `jornada` da interface de controle. Com a interface de controle, os testes que olham o redirecionamento (AUT-012, AUT-013, AUT-025, ERR-006) dizem que ele foi informado pelo provedor, e não observado, e terminam não verificáveis. Contra o servidor de exemplo sem interface de controle, só com a jornada pelas páginas, a suíte termina com 107 aprovados e 25 não verificáveis; sem nenhuma das duas, com 55 aprovados e 77 não verificáveis.
 
 Para os testes do registro (REG), a suíte publica candidatos assinados na hospedagem e o provedor precisa buscá-los ali (`registro.caminho_de_publicacao`). Ela precisa também da chave privada do registro de teste (`registro.chave_privada_para_candidatos`). Isso só faz sentido com um registro de teste, nunca com o registro real.
 
@@ -195,7 +198,7 @@ O arquivo gerado em `ambiente-local/gerado/suite.config.json` é um exemplo comp
 | `clientes.secundario`, `sentinela`, `suspenso`, `retirado` | Não | Mesmo formato |
 | `certificado_nao_registrado` | Não | Certificado de cliente válido fora do registro (SEG-004) |
 | `pacientes.principal` | Sim | `usuario`, `senha` (usada só pela jornada por formulário, dentro do domínio do provedor), `cpf`, `fhir_id`, e opcionalmente `laudos_nao_liberados`, `laudo_antigo` (`id`, `data`), `laudo_para_retificar`, `agendamento_de_outro_canal` |
-| `pacientes.outro`, `pacientes.sem_cpf` | Não | `usuario`, `senha`, `cpf`, `fhir_id` |
+| `pacientes.outro`, `pacientes.sem_cpf`, `pacientes.cpf_invalido` | Não | `usuario`, `senha`, `cpf`, `fhir_id`. `cpf_invalido` é um paciente cujo CPF no cadastro do provedor não é válido, por exemplo `00000000000` (CNS-025) |
 | `agenda.unidade` | Não | Unidade dos testes de agenda e agendamento, `Location/{id}` |
 | `agenda.exame_comum`, `agenda.exame_restrito` | Não | `sistema\|código` de um exame comum e de um que só cabe em parte dos horários (AGE-005) |
 | `agenda.exame_indisponivel` | Não | `unidade` e `exame` que ela não coleta (AGE-006) |
