@@ -6,12 +6,12 @@ Há quatro números de versão, com papéis diferentes.
 
 | Número | Formato | Onde aparece | O que significa | Valor hoje |
 | --- | --- | --- | --- | --- |
-| **Versão do documento** | `MAJOR.MINOR.PATCH` | Índice, README, `CHANGELOG.md` | Edição do texto da especificação | `0.2.1` |
+| **Versão do documento** | `MAJOR.MINOR.PATCH` | Índice, README, `CHANGELOG.md` | Edição do texto da especificação | `0.2.2` |
 | **Versão do protocolo** | `MAJOR.MINOR` | `protocol_versions` de cada participante no registro | O comportamento que o participante implementa. São os dois primeiros números da versão do documento que ele seguiu | `0.2` |
 | **Segmento de caminho** | `v{MAJOR}` | Final de `api_base_url` | Só o MAJOR da versão do protocolo. Existe para que dois MAJOR convivam no mesmo servidor | `v0` |
 | **Versão do formato do registro** | `MAJOR.MINOR` | `schema_version` do registro | Formato do arquivo de participantes. Numeração própria, sem relação com as outras três | `0.1` |
 
-O PATCH nunca aparece no registro nem em caminho. Duas implementações de `0.2.0` e `0.2.1` declaram a mesma versão de protocolo, `0.2`.
+O PATCH nunca aparece no registro nem em caminho. Implementações de `0.2.0`, `0.2.1` e `0.2.2` declaram a mesma versão de protocolo, `0.2`. Por isso um PATCH não pode exigir de um lado algo que corte a comunicação com o outro lado de um PATCH anterior da mesma versão de protocolo: quando a correção de um ponto exigiria isso, o PATCH fixa o que pode fixar sem quebra e deixa o resto para a versão de protocolo seguinte, dizendo o que ficou para depois.
 
 A API FHIR não leva a versão do protocolo no caminho. A versão do FHIR (R4) e os perfis suportados são declarados no `CapabilityStatement`.
 
@@ -30,13 +30,14 @@ A versão efetiva entre um receptor e um provedor é calculada pelos dois, da me
 1. Toma-se o maior MAJOR que aparece nas duas listas. Se não há MAJOR em comum, não há comunicação.
 2. **Se esse MAJOR é 0:** a versão efetiva é a maior versão `0.MINOR` idêntica nas duas listas. Se não há versão idêntica, não há comunicação. `0.2` e `0.3` não se falam.
 3. **Se esse MAJOR é 1 ou mais:** quem lista `M.n` se compromete a operar corretamente com qualquer `M.k` em que `k` é menor ou igual a `n`. A versão efetiva é `M.m`, em que `m` é o menor entre o maior MINOR de cada lado para aquele MAJOR. Não é preciso haver MINOR idêntico. O lado com MINOR maior NÃO DEVE depender de nada introduzido depois de `M.m`: não envia campo, escopo ou parâmetro que a outra ponta não conhece, e não exige dela resposta que só exista em versão posterior.
-4. O caminho usado é o `api_base_url` do provedor cujo final é `/v{M}`.
+4. O caminho usado é o `api_base_url` do provedor cujo final é `/v{M}`. Se o `api_base_url` não termina assim, a entrada do provedor está incoerente, e o receptor trata o caso como "não há comunicação".
+5. **A versão efetiva precisa ser implementada pelo software.** Cada participante DEVE declarar em `protocol_versions` só versões que o próprio software implementa. Se, ainda assim, a versão efetiva calculada não é uma que o software do participante implementa (por exemplo, a entrada do registro foi atualizada antes do software, ou o contrário), o participante a trata como inexistente: não há comunicação. O cálculo dos passos 1 a 3 continua sendo feito sobre o registro, que é o que a outra ponta também vê.
 
-"Não há comunicação" quer dizer: o receptor não oferece aquele provedor ao paciente e não chama nenhum endpoint dele, e o provedor recusa o receptor com `invalid_client` no servidor de autorização e com 403 `RECEIVER_NOT_ALLOWED` nas APIs.
+"Não há comunicação" quer dizer: o receptor não oferece aquele provedor ao paciente e não chama nenhum endpoint dele, nem para revogar consentimento, e o provedor recusa o receptor com `invalid_client` no servidor de autorização e com 403 `RECEIVER_NOT_ALLOWED` nas APIs.
 
 Enquanto o MAJOR for 0, cada participante DEVE listar exatamente uma versão em `protocol_versions`. Um mesmo caminho `/v0` não tem como atender duas versões incompatíveis ao mesmo tempo, então a troca de `0.x` para `0.y` é combinada entre os participantes do piloto e feita em data marcada.
 
-Consentimentos e tokens existentes não mudam de versão. Se a versão efetiva entre dois participantes deixa de existir (um deles mudou de MINOR na fase 0), valem as regras de receptor `suspended`: nada novo é aceito, e os consentimentos ficam como estão até a compatibilidade voltar, expirarem ou serem revogados. A revogação continua possível pelas regras de [08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.3, e pela página do provedor.
+Consentimentos e tokens existentes não mudam de versão. Se a versão efetiva entre dois participantes deixa de existir (um deles mudou de MINOR na fase 0), o provedor aplica as regras de receptor `suspended`: nada novo é aceito, e os consentimentos ficam como estão até a compatibilidade voltar, expirarem ou serem revogados. O receptor aplica as de provedor fora de `active` ([08-registro-de-participantes.md](08-registro-de-participantes.md), seção 8.4): não faz chamada nenhuma, nem de revogação. O paciente continua podendo revogar pela página de consentimentos do provedor, e o receptor guarda as revogações pendentes, mostrando essa página ao paciente, até a compatibilidade voltar ou o consentimento expirar.
 
 **Regras de compatibilidade**
 
@@ -51,7 +52,7 @@ Consentimentos e tokens existentes não mudam de versão. Se a versão efetiva e
 
 Um participante é conforme a uma versão quando cumpre todos os requisitos DEVE e NÃO DEVE que se aplicam ao seu papel. No piloto, a conformidade é autodeclarada contra a lista da seção 9.3. Uma suíte automatizada é trabalho futuro, e a lista foi escrita para servir de roteiro dela.
 
-Cada requisito tem um identificador estável. A partir da primeira versão publicada, um identificador nunca é reaproveitado: requisito removido fica marcado como retirado, e requisito alterado de forma incompatível ganha número novo. Os identificadores foram renumerados uma única vez, antes do primeiro commit, quando o perfil de segurança mudou. Desde a versão 0.2.0 a regra vale: a versão 0.2.1 só acrescentou identificadores e marcou dois como retirados.
+Cada requisito tem um identificador estável. A partir da primeira versão publicada, um identificador nunca é reaproveitado: requisito removido fica marcado como retirado, e requisito alterado de forma incompatível ganha número novo. Os identificadores foram renumerados uma única vez, antes do primeiro commit, quando o perfil de segurança mudou. Desde a versão 0.2.0 a regra vale: a versão 0.2.1 só acrescentou identificadores e marcou dois como retirados, e a 0.2.2 só acrescentou identificadores.
 
 Prefixos: `REG` registro, `SEG` transporte e chaves, `AUT` servidor de autorização, `CNS` consentimento, `API` regras comuns da API, `CAT` catálogo, `UNI` unidades, `AGE` agenda, `AGD` agendamento, `RES` resultados, `ERR` erros, `RCP` receptor.
 
@@ -72,7 +73,10 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | REG-007 | Aplica os catorze passos de verificação da seção 8.3 e recusa o candidato que falha em qualquer um: algoritmo diferente de PS256, `kid` diferente do thumbprint, validade maior que 30 dias, ambiente errado, `participant_id` repetido | Servir um candidato por condição, cada um validamente assinado quando a condição não é a assinatura |
 | REG-008 | Depois de `expires_at` sem documento novo, recusa PAR, criação de consentimento e `client_credentials` de catálogo, unidades e agenda. Por 7 dias, aceita `client_credentials` com `consent.manage` como único escopo e atende `GET` e `DELETE` de consentimento. Depois dos 7 dias, recusa também | Deixar o registro expirar. No dia 1: PAR falha, `catalog.read` falha, `consent.manage` sozinho funciona, `DELETE` devolve 204, `POST /consents` devolve 403 `REGISTRY_EXPIRED`. No dia 8: `consent.manage` falha |
 | REG-009 | Calcula a versão efetiva pela regra da seção 9.1 e não se comunica com participante sem versão efetiva | Registro com par `0.2` e `0.3`: sem comunicação. Registro com `1.1` e `1.3`: comunicação como `1.1` |
-| REG-010 | Enquanto o MAJOR for 0, lista exatamente uma versão em `protocol_versions` | Ler a entrada do participante |
+| REG-010 | Enquanto o MAJOR for 0, lista exatamente uma versão em `protocol_versions` | Ler a entrada do participante. Desde a 0.2.2 o schema também confere: um documento com uma entrada que lista uma versão `0.x` e outra versão não valida, e é recusado (REG-003) |
+| REG-011 | Na verificação do registro, ignora `typ` e os membros do cabeçalho protegido além de `alg` e `kid`, não usa nenhum deles para obter a chave, e recusa o candidato que traz `crit` | Servir candidatos validamente assinados com a chave de `registry_keys`: com `typ` igual a `JWT`, com um membro a mais e com `jwk` de outra chave (aceitos); com `crit` (recusado) |
+| REG-012 | Trata como inexistente a versão efetiva que o próprio software não implementa, e não se comunica com a outra ponta nesse caso | Registro em que o participante e a outra ponta declaram uma versão que o software do participante não implementa |
+| REG-013 | Com o registro expirado, o provedor recusa a concessão `authorization_code` com `unauthorized_client`, inclusive de jornada aberta antes do vencimento | Abrir a jornada, deixar o registro do provedor expirar antes da troca, trocar o código |
 
 ### Transporte e chaves (provedor)
 
@@ -147,6 +151,8 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | CNS-022 | Estados finais não mudam | Tentar autorizar e revogar a partir de cada estado final |
 | CNS-023 | Oferece página de gestão de consentimentos em `consent_management_uri`, com revogação | Inspeção |
 | CNS-024 | `GET /consents/{id}` com token de provedor responde para consentimento em estado final | Consultar depois de revogar |
+| CNS-025 | Paciente cujo CPF no cadastro não é válido pela regra da seção 4.4 (dígitos verificadores errados, ou onze algarismos iguais) é tratado como paciente sem CPF: `access_denied` e `REJECTED` com `PATIENT_WITHOUT_CPF` | Autenticar com paciente de teste cujo CPF no cadastro é `00000000000` |
+| CNS-026 | `DELETE` repetido ou concorrente do mesmo consentimento aplica a transição uma única vez, mantém o `status_reason` da primeira chamada e responde a cada uma com 204 ou 422 `CONSENT_INVALID_STATE`, nunca 409 nem 5xx | Enviar dois `DELETE` simultâneos com motivos diferentes e consultar |
 
 ### API: regras comuns (provedor)
 
@@ -164,6 +170,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | API-010 | Toda resposta 4xx e 5xx traz `OperationOutcome` com um código de `urn:open-labs-brasil:error-code` | Provocar cada erro da seção 6.3 |
 | API-011 | Leitura por id de recurso de outro paciente devolve 404 | Usar id de recurso do paciente B com token do paciente A |
 | API-012 | Todo `link` de paginação fica dentro do `fhir_base_url` do registro | Paginar cada busca e comparar esquema, host, porta e prefixo de caminho |
+| API-013 | Todo `link` de paginação é URL absoluta com esquema `https` e sem componente de usuário | Paginar cada busca e inspecionar os links |
 
 ### Catálogo, unidades e agenda (provedor, token de provedor)
 
@@ -173,6 +180,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | CAT-002 | Suporta `ChargeItemDefinition` com `status`, `url`, `jurisdiction`, `_lastUpdated` | Uma busca por parâmetro |
 | CAT-003 | Item retirado continua legível com `status` igual a `retired` e aparece na busca por `_lastUpdated` | Retirar um item no ambiente de teste |
 | CAT-004 | Todo `ChargeItemDefinition` ativo tem `code` igual ao de algum `ActivityDefinition` | Sincronizar tudo e cruzar |
+| CAT-005 | Em `ChargeItemDefinition.useContext`, usa só os contextos `venue` e `brand` da seção 5.5.2, cada um com `valueReference.reference` | Sincronizar tudo e inspecionar cada `useContext` |
 | UNI-001 | Suporta `Location` com `status`, `address-city`, `address-state`, `_lastUpdated` | Uma busca por parâmetro |
 | UNI-002 | Suporta `HealthcareService` com `location`, `active`, `_lastUpdated` | Uma busca por parâmetro |
 | AGE-001 | Atende `Schedule` e `Slot` com token de provedor que tem `schedule.read`, sem consentimento e sem dado de paciente | Buscar horários só com token de provedor |
@@ -228,6 +236,7 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | ERR-004 | Nenhuma resposta de erro contém dado pessoal, CPF, token ou rastro de pilha | Inspecionar todos os erros provocados |
 | ERR-005 | 429 e 503 trazem `Retry-After` | Exceder o limite no ambiente de teste |
 | ERR-006 | Respostas de erro do endpoint de autorização trazem `iss` | Recusar o consentimento e inspecionar o redirecionamento |
+| ERR-007 | Nas respostas ao `DELETE` de consentimento e ao pedido de token `client_credentials` com `consent.manage`, `Retry-After` não passa de 86400 segundos | Provocar 429 e 503 nesses dois endpoints no ambiente de teste |
 
 ### Receptor
 
@@ -270,7 +279,21 @@ A coluna "Como testar" descreve o estímulo e o resultado esperado. "Cliente de 
 | RCP-035 | Lê o link de pagamento somente da extensão de URL canônica `payment-link` e só o abre se o esquema for `https` | Provedor de teste devolve link com `http`, e link em outro elemento |
 | RCP-036 | Envia `If-None-Exist` na forma literal `identifier={system}\|{value}`, com `value` restrito ao conjunto de caracteres da seção 5.5.5 | Provedor de teste inspeciona o cabeçalho |
 | RCP-037 | Calcula a versão efetiva pela regra da seção 9.1 e não oferece ao paciente provedor sem versão efetiva | Registro com provedor `0.3` e receptor `0.2` |
+| RCP-038 | Grava a revogação em armazenamento durável no momento em que ela é decidida, antes da primeira tentativa, e um reinício durante as tentativas automáticas não a perde | Provedor de teste segura a resposta do primeiro `DELETE`. Reiniciar o backend do receptor. A revogação aparece como pendente e volta a ser tentada |
+| RCP-039 | Só trata um 404 da revogação como conclusão quando o `OperationOutcome` traz o código `CONSENT_NOT_FOUND`. Um 404 sem esse código mantém a revogação pendente | Provedor de teste devolve 404 sem corpo, e 404 com outro código |
+| RCP-040 | Diante de falha que não admite repetição na revogação (seção 4.4), encerra as tentativas automáticas na hora e mantém a revogação pendente | Provedor de teste devolve `invalid_client` no endpoint de token: uma tentativa só, pendência gravada |
+| RCP-041 | Não faz tentativa de revogação, automática ou do calendário, antes do instante indicado por `Retry-After`, contado até no máximo 24 horas (RCP-050), e encerra as tentativas automáticas quando a espera passa do próprio teto | Provedor de teste devolve 503 com `Retry-After: 7200` e observa as chamadas seguintes |
+| RCP-042 | Trata como inválido o CPF que não tem 11 dígitos com dígitos verificadores certos ou que tem onze algarismos iguais, tanto no `patient.cpf` recebido quanto no CPF do paciente que inicia a jornada. Com o CPF do paciente inválido, não inicia a jornada nem troca o código | Provedor de teste devolve `11111111111`: revogação com `RECEIVER_TERMINATION`. Aplicativo informa `00000000000`: nenhuma chamada ao provedor |
+| RCP-043 | Não segue `link` de paginação com componente de usuário e não faz requisição fora do `fhir_base_url` a partir de link relativo | Provedor de teste devolve `next` com `usuario@` antes do host certo, e `next` relativos que resolvem dentro e fora da base |
+| RCP-044 | Com mais de uma extensão `payment-link` no `Appointment`, não abre link nenhum | Provedor de teste devolve duas extensões |
+| RCP-045 | No agendamento, identifica o paciente só pela referência `Patient/{fhir_id}`, sem `identifier`, no participante e no `subject` de cada pedido contido | Provedor de teste inspeciona o corpo do `POST` |
+| RCP-046 | Não oferece nem chama provedor cujo `api_base_url` não termina em `/v{M}` da versão efetiva | Registro com provedor `0.2` e `api_base_url` terminado em `/v1` |
+| RCP-047 | Com o registro local expirado, não troca código de autorização, nem de jornada aberta antes do vencimento | Abrir a jornada, deixar o registro do receptor expirar, entregar o retorno da autorização |
+| RCP-048 | Não chama provedor que não está `active` no registro aceito, ou sem versão efetiva, nem para revogar. Mantém as revogações pendentes para ele à vista do paciente, com a página do provedor, e retoma o calendário quando ele volta a `active` | Suspender o provedor de teste com uma revogação pendente, observar as chamadas, reativar |
+| RCP-049 | Não trata como geral um preço que traz contexto de uso que o receptor não reconhece | Provedor de teste devolve preço com `useContext` de outro sistema de códigos, e com `venue` sem referência |
+| RCP-050 | Na revogação, trata `Retry-After` maior que 24 horas como 24 horas e, passado esse prazo, retoma o calendário da seção 4.4 | Provedor de teste devolve 503 com `Retry-After: 172800` e observa a chamada seguinte, que vem em até 24 horas mais o intervalo do calendário |
+| RCP-051 | Resolve `link` de paginação relativo contra a URL da requisição que devolveu o Bundle e o segue quando a URL resultante passa nas conferências da seção 5.1 | Provedor de teste devolve `next` igual a `?page=2` e a um caminho absoluto dentro da base: o receptor busca a página seguinte |
 
-São 162 identificadores, dos quais 2 retirados e 160 em vigor (contados por script sobre este arquivo). A versão 0.2.1 acrescentou REG-007 a REG-010, AUT-026, AUT-027, API-012, AGD-015 a AGD-017 e RCP-027 a RCP-037.
+São 184 identificadores, dos quais 2 retirados e 182 em vigor (contados por script sobre este arquivo). A versão 0.2.1 acrescentou REG-007 a REG-010, AUT-026, AUT-027, API-012, AGD-015 a AGD-017 e RCP-027 a RCP-037. A versão 0.2.2 acrescentou REG-011 a REG-013, CNS-025, CNS-026, API-013, CAT-005, ERR-007 e RCP-038 a RCP-051.
 
-RCP-002, RCP-015, RCP-023, RCP-025 e a parte de tela de RCP-028 não se provam só com teste de caixa-preta. Uma suíte automatizada cobre os demais, e esses pedem inspeção ou declaração auditável. O mesmo vale, do lado do provedor, para AUT-024, CNS-008 e CNS-023, que dependem de olhar telas.
+RCP-002, RCP-015, RCP-023, RCP-025 e as partes de tela de RCP-028 e RCP-048 não se provam só com teste de caixa-preta. Uma suíte automatizada cobre os demais, e esses pedem inspeção ou declaração auditável. O mesmo vale, do lado do provedor, para AUT-024, CNS-008 e CNS-023, que dependem de olhar telas.

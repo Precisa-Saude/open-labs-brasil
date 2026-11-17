@@ -161,11 +161,13 @@
           }
         },
         "protocol_versions": {
-          "description": "Versões MAJOR.MINOR do protocolo que o participante implementa. Enquanto MAJOR for 0, exatamente uma.",
+          "description": "Versões MAJOR.MINOR do protocolo que o software do participante implementa. Enquanto MAJOR for 0, exatamente uma: uma lista com uma versão 0.x não pode trazer outra versão.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" }
+          "items": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+          "if": { "contains": { "type": "string", "pattern": "^0\\." } },
+          "then": { "maxItems": 1 }
         },
         "updated_at": { "$ref": "#/$defs/utcDateTime" },
         "provider": {

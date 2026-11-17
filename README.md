@@ -6,7 +6,7 @@ A regra que organiza todo o desenho: **a senha do paciente no laboratório nunca
 
 ## Situação
 
-**Rascunho, em fase de piloto.** Versão 0.2.1 da especificação, de 2026-11-16. O histórico está em [CHANGELOG.md](CHANGELOG.md).
+**Rascunho, em fase de piloto.** Versão 0.2.2 da especificação, de 2026-11-17. O histórico está em [CHANGELOG.md](CHANGELOG.md).
 
 - Nada foi implementado nem testado contra um laboratório real. Há um servidor de exemplo, com dados sintéticos, e uma suíte de conformidade (seção "Ferramentas").
 - Enquanto a versão começar com 0, qualquer mudança pode quebrar a anterior.

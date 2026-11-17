@@ -79,7 +79,7 @@ https://fhir-brasil.dev.br/ig/StructureDefinition/<id>
 | `br-diagnostic-report` | DiagnosticReport |
 | `br-lab-observation` | Observation |
 
-Os nove primeiros perfis foram incorporados ao guia de implementação depois da versão 0.2.0 desta especificação, e a versão 0.2.1 foi conferida contra eles. Onde esta especificação ainda depende de uma decisão do guia (por exemplo, em qual sistema de códigos fica o exame em `Slot.serviceType`), o ponto está marcado em [05-api.md](05-api.md) e listado em `docs/NOTAS-DE-REVISAO.md`.
+Os nove primeiros perfis foram incorporados ao guia de implementação depois da versão 0.2.0 desta especificação, e a versão 0.2.1 foi conferida contra eles. A 0.2.2 releu os perfis de agendamento, pedido de exame, consentimento e preço. Em dois pontos o protocolo restringe mais do que o perfil, e a restrição está no texto desta especificação, sem mudança no guia: o paciente do agendamento vai só por referência ([05-api.md](05-api.md), seção 5.5.5), e o preço só usa os contextos `venue` e `brand` ([05-api.md](05-api.md), seção 5.5.2). Onde esta especificação ainda depende de uma decisão do guia (por exemplo, em qual sistema de códigos fica o exame em `Slot.serviceType`), o ponto está marcado em [05-api.md](05-api.md) e listado em `docs/NOTAS-DE-REVISAO.md`.
 
 Além dos perfis, o protocolo referencia do guia a extensão `https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link` ([05-api.md](05-api.md), seção 5.5.5).
 
