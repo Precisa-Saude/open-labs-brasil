@@ -3,13 +3,23 @@
 // controle de teste.
 
 import { readFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import http from 'node:http';
 import https from 'node:https';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { exportJWK, generateKeyPair, calculateJwkThumbprint } from 'jose';
-import { tratarPagina, expirarPagamentos } from './agendamento.ts';
-import { caminhoDosMetadados, metadados, tratarAutorizacao, tratarCompartilhamentos, tratarPar, tratarRevogacaoDeToken, tratarToken } from './autorizacao.ts';
-import { Relogio, type ConfiguracaoDoServidor } from './configuracao.ts';
+
+import { calculateJwkThumbprint, exportJWK, generateKeyPair } from 'jose';
+
+import { expirarPagamentos, tratarPagina } from './agendamento.ts';
+import {
+  caminhoDosMetadados,
+  metadados,
+  tratarAutorizacao,
+  tratarCompartilhamentos,
+  tratarPar,
+  tratarRevogacaoDeToken,
+  tratarToken,
+} from './autorizacao.ts';
+import { type ConfiguracaoDoServidor, Relogio } from './configuracao.ts';
 import { tratarConsentimentos } from './consentimentos.ts';
 import { tratarControle } from './controle.ts';
 import { tratarFhir } from './fhir.ts';
@@ -27,7 +37,8 @@ export const SUITES_TLS12 = [
   'ECDHE-ECDSA-AES256-GCM-SHA384',
 ].join(':');
 
-const SUITES_FRACAS = 'AES128-SHA:AES256-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:AES128-GCM-SHA256:ECDHE-RSA-CHACHA20-POLY1305';
+const SUITES_FRACAS =
+  'AES128-SHA:AES256-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:AES128-GCM-SHA256:ECDHE-RSA-CHACHA20-POLY1305';
 
 /** Retry-After da manutenção simulada. Na revogação, nunca acima de 86400 (seção 6.5, ERR-007). */
 function esperaDeManutencao(provedor: Provedor): string {
@@ -35,9 +46,9 @@ function esperaDeManutencao(provedor: Provedor): string {
 }
 
 export interface ServidorEmExecucao {
-  provedor: Provedor;
   enderecos: { publico: string; mtls: string; controle?: string };
   fechar: () => Promise<void>;
+  provedor: Provedor;
 }
 
 function cabecalhosComuns(res: ServerResponse, provedor: Provedor) {
@@ -46,7 +57,10 @@ function cabecalhosComuns(res: ServerResponse, provedor: Provedor) {
   res.setHeader('Date', provedor.relogio.agora().toUTCString());
 }
 
-export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { relogio?: Relogio } = {}): Promise<ServidorEmExecucao> {
+export async function iniciarServidor(
+  cfg: ConfiguracaoDoServidor,
+  opcoes: { relogio?: Relogio } = {},
+): Promise<ServidorEmExecucao> {
   const log = (m: string) => {
     if (cfg.registrarEmLog) console.log(`[servidor-de-exemplo] ${m}`);
   };
@@ -56,73 +70,114 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
   const provedor = new Provedor(cfg, relogio, registro, log);
 
   // Chave publicada no jwks_uri. Os tokens são opacos, então ela não assina nada (seção 5.3.6).
-  const { publicKey } = await generateKeyPair('PS256', { modulusLength: 2048, extractable: true });
+  const { publicKey } = await generateKeyPair('PS256', { extractable: true, modulusLength: 2048 });
   const jwkPublico = await exportJWK(publicKey);
-  const jwks = { keys: [{ ...jwkPublico, kid: await calculateJwkThumbprint(jwkPublico), use: 'sig', alg: 'PS256' }] };
+  const jwks = {
+    keys: [
+      { ...jwkPublico, alg: 'PS256', kid: await calculateJwkThumbprint(jwkPublico), use: 'sig' },
+    ],
+  };
 
   const tls = {
-    key: readFileSync(cfg.tls.chave),
     cert: readFileSync(cfg.tls.certificado),
-    minVersion: cfg.violacoes.has('aceita-tls-1-1') ? ('TLSv1.1' as const) : ('TLSv1.2' as const),
     ciphers: cfg.violacoes.has('aceita-tls-1-1')
       ? `${SUITES_TLS12}:ECDHE-RSA-AES128-SHA:@SECLEVEL=0`
-      : cfg.violacoes.has('tls-com-suites-fracas') ? `${SUITES_TLS12}:${SUITES_FRACAS}` : SUITES_TLS12,
+      : cfg.violacoes.has('tls-com-suites-fracas')
+        ? `${SUITES_TLS12}:${SUITES_FRACAS}`
+        : SUITES_TLS12,
     honorCipherOrder: true,
+    key: readFileSync(cfg.tls.chave),
+    minVersion: cfg.violacoes.has('aceita-tls-1-1') ? ('TLSv1.1' as const) : ('TLSv1.2' as const),
   };
 
-  const comCaptura = (tratar: (req: IncomingMessage, res: ServerResponse) => Promise<void>) => (req: IncomingMessage, res: ServerResponse) => {
-    tratar(req, res).catch((e: unknown) => {
-      log(`falha não tratada: ${(e as Error).stack ?? String(e)}`);
-      if (!res.headersSent) {
-        if (!res.hasHeader('x-fapi-interaction-id')) res.setHeader('x-fapi-interaction-id', novoId());
-        enviarFhir(res, 500, operationOutcome(new ErroDeApi(500, 'INTERNAL_ERROR', 'exception', 'Falha interna.')));
+  const comCaptura =
+    (tratar: (req: IncomingMessage, res: ServerResponse) => Promise<void>) =>
+    (req: IncomingMessage, res: ServerResponse) => {
+      tratar(req, res).catch((e: unknown) => {
+        log(`falha não tratada: ${(e as Error).stack ?? String(e)}`);
+        if (!res.headersSent) {
+          if (!res.hasHeader('x-fapi-interaction-id'))
+            res.setHeader('x-fapi-interaction-id', novoId());
+          enviarFhir(
+            res,
+            500,
+            operationOutcome(new ErroDeApi(500, 'INTERNAL_ERROR', 'exception', 'Falha interna.')),
+          );
+        } else res.destroy();
+      });
+    };
+
+  const publico = https.createServer(
+    tls,
+    comCaptura(async (req, res) => {
+      cabecalhosComuns(res, provedor);
+      const url = new URL(req.url ?? '/', provedor.issuer);
+      const compartilhamentos = new URL(provedor.participante.provider!.consent_management_uri)
+        .pathname;
+      if (provedor.violacao('cors-na-autorizacao') && url.pathname.startsWith('/authorize'))
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      if (req.method === 'OPTIONS')
+        return enviarHtml(res, 405, paginaDeErro('Método não suportado.'), { Allow: 'GET, POST' });
+      if (req.method === 'GET' && url.pathname === caminhoDosMetadados(provedor.issuer)) {
+        return enviarJson(res, 200, metadados(provedor), { 'Cache-Control': 'max-age=3600' });
       }
-      else res.destroy();
-    });
-  };
+      if (req.method === 'GET' && url.pathname === '/jwks') return enviarJson(res, 200, jwks);
+      if (url.pathname === '/authorize' || url.pathname.startsWith('/authorize/'))
+        return tratarAutorizacao(provedor, req, res, url);
+      if (url.pathname === compartilhamentos || url.pathname.startsWith(`${compartilhamentos}/`))
+        return tratarCompartilhamentos(provedor, req, res, url);
+      if (url.pathname.startsWith('/pagamento/')) return tratarPagina(provedor, req, res, url);
+      return enviarHtml(res, 404, paginaDeErro('Página não encontrada.'));
+    }),
+  );
 
-  const publico = https.createServer(tls, comCaptura(async (req, res) => {
-    cabecalhosComuns(res, provedor);
-    const url = new URL(req.url ?? '/', provedor.issuer);
-    const compartilhamentos = new URL(provedor.participante.provider!.consent_management_uri).pathname;
-    if (provedor.violacao('cors-na-autorizacao') && url.pathname.startsWith('/authorize')) res.setHeader('Access-Control-Allow-Origin', '*');
-    if (req.method === 'OPTIONS') return enviarHtml(res, 405, paginaDeErro('Método não suportado.'), { Allow: 'GET, POST' });
-    if (req.method === 'GET' && url.pathname === caminhoDosMetadados(provedor.issuer)) {
-      return enviarJson(res, 200, metadados(provedor), { 'Cache-Control': 'max-age=3600' });
-    }
-    if (req.method === 'GET' && url.pathname === '/jwks') return enviarJson(res, 200, jwks);
-    if (url.pathname === '/authorize' || url.pathname.startsWith('/authorize/')) return tratarAutorizacao(provedor, req, res, url);
-    if (url.pathname === compartilhamentos || url.pathname.startsWith(`${compartilhamentos}/`)) return tratarCompartilhamentos(provedor, req, res, url);
-    if (url.pathname.startsWith('/pagamento/')) return tratarPagina(provedor, req, res, url);
-    return enviarHtml(res, 404, paginaDeErro('Página não encontrada.'));
-  }));
-
-  const mtls = https.createServer({ ...tls, requestCert: true, rejectUnauthorized: false, ca: readFileSync(cfg.tls.caConfiavel) }, comCaptura(async (req, res) => {
-    cabecalhosComuns(res, provedor);
-    const url = new URL(req.url ?? '/', provedor.urlMtls);
-    const api = new URL(provedor.apiBaseUrl).pathname.replace(/\/$/, '');
-    const fhir = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
-    if (provedor.emManutencao) {
-      if (['/par', '/token', '/revoke'].includes(url.pathname)) {
-        return enviarJson(res, 503, { error: 'temporarily_unavailable', error_description: 'manutenção simulada' }, provedor.violacao('sem-retry-after') ? { 'Cache-Control': 'no-store' } : { 'Retry-After': esperaDeManutencao(provedor), 'Cache-Control': 'no-store' });
+  const mtls = https.createServer(
+    { ...tls, ca: readFileSync(cfg.tls.caConfiavel), rejectUnauthorized: false, requestCert: true },
+    comCaptura(async (req, res) => {
+      cabecalhosComuns(res, provedor);
+      const url = new URL(req.url ?? '/', provedor.urlMtls);
+      const api = new URL(provedor.apiBaseUrl).pathname.replace(/\/$/, '');
+      const fhir = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
+      if (provedor.emManutencao) {
+        if (['/par', '/token', '/revoke'].includes(url.pathname)) {
+          return enviarJson(
+            res,
+            503,
+            { error: 'temporarily_unavailable', error_description: 'manutenção simulada' },
+            provedor.violacao('sem-retry-after')
+              ? { 'Cache-Control': 'no-store' }
+              : { 'Cache-Control': 'no-store', 'Retry-After': esperaDeManutencao(provedor) },
+          );
+        }
+        return comTratamentoDeErros(provedor, req, res, async () => {
+          throw new ErroDeApi(
+            503,
+            'PROVIDER_UNAVAILABLE',
+            'transient',
+            'Provedor em manutenção (simulada).',
+            {
+              cabecalhos: provedor.violacao('sem-retry-after')
+                ? {}
+                : { 'Retry-After': esperaDeManutencao(provedor) },
+            },
+          );
+        });
+      }
+      if (url.pathname === '/par') return tratarPar(provedor, req, res);
+      if (url.pathname === '/token') return tratarToken(provedor, req, res);
+      if (url.pathname === '/revoke') return tratarRevogacaoDeToken(provedor, req, res);
+      if (url.pathname === api || url.pathname.startsWith(`${api}/`))
+        return tratarConsentimentos(provedor, req, res, url);
+      if (url.pathname === fhir || url.pathname.startsWith(`${fhir}/`)) {
+        expirarPagamentos(provedor);
+        provedor.dados.garantirAgendas(provedor.relogio.agoraMs());
+        return tratarFhir(provedor, req, res, url);
       }
       return comTratamentoDeErros(provedor, req, res, async () => {
-        throw new ErroDeApi(503, 'PROVIDER_UNAVAILABLE', 'transient', 'Provedor em manutenção (simulada).', { cabecalhos: provedor.violacao('sem-retry-after') ? {} : { 'Retry-After': esperaDeManutencao(provedor) } });
+        throw new ErroDeApi(404, 'RESOURCE_NOT_FOUND', 'not-found', 'Endpoint inexistente.');
       });
-    }
-    if (url.pathname === '/par') return tratarPar(provedor, req, res);
-    if (url.pathname === '/token') return tratarToken(provedor, req, res);
-    if (url.pathname === '/revoke') return tratarRevogacaoDeToken(provedor, req, res);
-    if (url.pathname === api || url.pathname.startsWith(`${api}/`)) return tratarConsentimentos(provedor, req, res, url);
-    if (url.pathname === fhir || url.pathname.startsWith(`${fhir}/`)) {
-      expirarPagamentos(provedor);
-      provedor.dados.garantirAgendas(provedor.relogio.agoraMs());
-      return tratarFhir(provedor, req, res, url);
-    }
-    return comTratamentoDeErros(provedor, req, res, async () => {
-      throw new ErroDeApi(404, 'RESOURCE_NOT_FOUND', 'not-found', 'Endpoint inexistente.');
-    });
-  }));
+    }),
+  );
 
   const controle = cfg.controle.habilitado
     ? http.createServer(comCaptura((req, res) => tratarControle(provedor, req, res)))
@@ -140,14 +195,19 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
   const intervalo = setInterval(() => {
     provedor.varrer();
     expirarPagamentos(provedor);
-    registro.talvezRecarregar().catch((e: unknown) => log(`falha ao recarregar o registro: ${(e as Error).message}`));
+    registro
+      .talvezRecarregar()
+      .catch((e: unknown) => log(`falha ao recarregar o registro: ${(e as Error).message}`));
   }, 2000);
   intervalo.unref();
 
   log(`emissor (issuer) ${provedor.issuer}`);
   log(`API FHIR ${provedor.fhirBaseUrl}`);
   log(`consentimentos ${provedor.apiBaseUrl}`);
-  if (controle) log(`controle de teste em http://${cfg.controle.enderecoDeEscuta}:${cfg.portas.controle}/_controle`);
+  if (controle)
+    log(
+      `controle de teste em http://${cfg.controle.enderecoDeEscuta}:${cfg.portas.controle}/_controle`,
+    );
   if (cfg.violacoes.size) log(`ATENÇÃO: modo de violações ativo: ${[...cfg.violacoes].join(', ')}`);
 
   const fecharServidor = (s: http.Server) =>
@@ -156,15 +216,21 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
       s.closeAllConnections();
     });
   return {
-    provedor,
     enderecos: {
-      publico: provedor.issuer,
       mtls: provedor.urlMtls,
-      ...(controle ? { controle: `http://${cfg.controle.enderecoDeEscuta}:${cfg.portas.controle}` } : {}),
+      publico: provedor.issuer,
+      ...(controle
+        ? { controle: `http://${cfg.controle.enderecoDeEscuta}:${cfg.portas.controle}` }
+        : {}),
     },
     fechar: async () => {
       clearInterval(intervalo);
-      await Promise.all([fecharServidor(publico), fecharServidor(mtls), ...(controle ? [fecharServidor(controle)] : [])]);
+      await Promise.all([
+        fecharServidor(publico),
+        fecharServidor(mtls),
+        ...(controle ? [fecharServidor(controle)] : []),
+      ]);
     },
+    provedor,
   };
 }

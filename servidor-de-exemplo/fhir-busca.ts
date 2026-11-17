@@ -2,21 +2,21 @@
 // (token, string, reference, date, uri), com "e" entre parâmetros repetidos e
 // "ou" entre valores separados por vírgula [FHIR-SEARCH].
 
-import { ErroDeApi } from './http.ts';
 import type { Recurso, Registro } from './dados.ts';
+import { ErroDeApi } from './http.ts';
 
 export type TipoDeParametro = 'token' | 'string' | 'reference' | 'date' | 'uri';
 
 export interface Token {
-  system?: string;
   code: string;
+  system?: string;
 }
 
 export interface DefinicaoDeParametro {
-  tipo: TipoDeParametro;
   /** Tipo do recurso referenciado, para valores de reference sem tipo. */
   alvo?: string;
   extrair: (registro: Registro) => unknown[];
+  tipo: TipoDeParametro;
 }
 
 type Faixa = [number, number];
@@ -25,13 +25,21 @@ const FUSO_PADRAO = '-03:00';
 
 /** Interpreta um valor de data FHIR como faixa [início, fim) em milissegundos. */
 export function faixaDeData(valor: string): Faixa | undefined {
-  const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/.exec(valor);
+  const m =
+    /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/.exec(
+      valor,
+    );
   if (!m) return undefined;
   const [, a, mes, dia, h, min, s, fracao, fuso] = m;
   const zona = fuso ?? FUSO_PADRAO;
-  const desloc = zona === 'Z' ? 0 : (zona.startsWith('-') ? -1 : 1) * (Number(zona.slice(1, 3)) * 60 + Number(zona.slice(4, 6)));
+  const desloc =
+    zona === 'Z'
+      ? 0
+      : (zona.startsWith('-') ? -1 : 1) *
+        (Number(zona.slice(1, 3)) * 60 + Number(zona.slice(4, 6)));
   const ano = Number(a);
-  const inicio = (y: number, mo: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) => Date.UTC(y, mo, d, hh, mm, ss, ms) - desloc * 60_000;
+  const inicio = (y: number, mo: number, d: number, hh = 0, mm = 0, ss = 0, ms = 0) =>
+    Date.UTC(y, mo, d, hh, mm, ss, ms) - desloc * 60_000;
   if (!mes) return [inicio(ano, 0, 1), inicio(ano + 1, 0, 1)];
   const mo = Number(mes) - 1;
   if (!dia) return [inicio(ano, mo, 1), inicio(ano, mo + 1, 1)];
@@ -62,26 +70,39 @@ export function analisarData(valor: string): { prefixo: Prefixo; faixa: Faixa } 
     resto = valor.slice(2);
   }
   const faixa = faixaDeData(resto);
-  if (!faixa) throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', `Data inválida na busca: ${valor}`);
-  return { prefixo, faixa };
+  if (!faixa)
+    throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', `Data inválida na busca: ${valor}`);
+  return { faixa, prefixo };
 }
 
 function comparaData(prefixo: Prefixo, [vs, ve]: Faixa, [rs, re]: Faixa): boolean {
   switch (prefixo) {
-    case 'eq': return rs >= vs && re <= ve;
-    case 'ne': return !(rs >= vs && re <= ve);
-    case 'gt': return re > ve;
-    case 'lt': return rs < vs;
-    case 'ge': return re > vs;
-    case 'le': return rs < ve;
-    case 'sa': return rs >= ve;
-    case 'eb': return re <= vs;
-    case 'ap': return rs < ve && re > vs;
+    case 'eq':
+      return rs >= vs && re <= ve;
+    case 'ne':
+      return !(rs >= vs && re <= ve);
+    case 'gt':
+      return re > ve;
+    case 'lt':
+      return rs < vs;
+    case 'ge':
+      return re > vs;
+    case 'le':
+      return rs < ve;
+    case 'sa':
+      return rs >= ve;
+    case 'eb':
+      return re <= vs;
+    case 'ap':
+      return rs < ve && re > vs;
   }
 }
 
 function normalizarTexto(t: string): string {
-  return t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return t
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
 }
 
 function dividirOu(valor: string): string[] {
@@ -94,7 +115,11 @@ export function faixaDoValor(v: unknown): Faixa | undefined {
   return undefined;
 }
 
-export function referenciaNormalizada(valor: string, alvo: string | undefined, baseFhir: string): string {
+export function referenciaNormalizada(
+  valor: string,
+  alvo: string | undefined,
+  baseFhir: string,
+): string {
   let v = valor;
   const base = baseFhir.replace(/\/$/, '');
   if (v.startsWith(`${base}/`)) v = v.slice(base.length + 1);
@@ -103,7 +128,12 @@ export function referenciaNormalizada(valor: string, alvo: string | undefined, b
 }
 
 /** Confere se o registro atende a um valor (já separado por "ou") de um parâmetro. */
-function atende(def: DefinicaoDeParametro, registro: Registro, valor: string, baseFhir: string): boolean {
+function atende(
+  def: DefinicaoDeParametro,
+  registro: Registro,
+  valor: string,
+  baseFhir: string,
+): boolean {
   const extraidos = def.extrair(registro);
   switch (def.tipo) {
     case 'token': {
@@ -128,7 +158,7 @@ function atende(def: DefinicaoDeParametro, registro: Registro, valor: string, ba
       return (extraidos as string[]).includes(ref);
     }
     case 'date': {
-      const { prefixo, faixa } = analisarData(valor);
+      const { faixa, prefixo } = analisarData(valor);
       return extraidos.some((v) => {
         const f = faixaDoValor(v);
         return f !== undefined && comparaData(prefixo, faixa, f);
@@ -157,7 +187,9 @@ export function filtrar(
     const def = definicoes[nome]!;
     if (modoOu.has(nome)) {
       // Só no modo de violações: ocorrências repetidas combinadas com "ou".
-      resultado = resultado.filter((r) => valores.some((v) => dividirOu(v).some((x) => atende(def, r, x, baseFhir))));
+      resultado = resultado.filter((r) =>
+        valores.some((v) => dividirOu(v).some((x) => atende(def, r, x, baseFhir))),
+      );
     } else {
       for (const v of valores) {
         resultado = resultado.filter((r) => dividirOu(v).some((x) => atende(def, r, x, baseFhir)));
@@ -169,23 +201,33 @@ export function filtrar(
 
 // Extratores de uso comum ----------------------------------------------------
 
-export const codigoSimples = (campo: string) => (r: Registro): Token[] => {
-  const v = (r.recurso as Record<string, unknown>)[campo];
-  return v === undefined ? [] : [{ code: String(v) }];
-};
+export const codigoSimples =
+  (campo: string) =>
+  (r: Registro): Token[] => {
+    const v = (r.recurso as Record<string, unknown>)[campo];
+    return v === undefined ? [] : [{ code: String(v) }];
+  };
 
-export const codeableConcepts = (pegar: (r: Recurso) => unknown) => (reg: Registro): Token[] => {
-  const v = pegar(reg.recurso);
-  const lista = Array.isArray(v) ? v : v ? [v] : [];
-  return lista.flatMap((cc: { coding?: Array<{ system?: string; code?: string }> }) =>
-    (cc.coding ?? []).filter((c) => c.code).map((c) => ({ ...(c.system ? { system: c.system } : {}), code: c.code! })),
-  );
-};
+export const codeableConcepts =
+  (pegar: (r: Recurso) => unknown) =>
+  (reg: Registro): Token[] => {
+    const v = pegar(reg.recurso);
+    const lista = Array.isArray(v) ? v : v ? [v] : [];
+    return lista.flatMap((cc: { coding?: Array<{ system?: string; code?: string }> }) =>
+      (cc.coding ?? [])
+        .filter((c) => c.code)
+        .map((c) => ({ ...(c.system ? { system: c.system } : {}), code: c.code! })),
+    );
+  };
 
-export const referencias = (pegar: (r: Recurso) => unknown) => (reg: Registro): string[] => {
-  const v = pegar(reg.recurso);
-  const lista = Array.isArray(v) ? v : v ? [v] : [];
-  return lista.map((x: { reference?: string }) => x.reference).filter((x): x is string => typeof x === 'string');
-};
+export const referencias =
+  (pegar: (r: Recurso) => unknown) =>
+  (reg: Registro): string[] => {
+    const v = pegar(reg.recurso);
+    const lista = Array.isArray(v) ? v : v ? [v] : [];
+    return lista
+      .map((x: { reference?: string }) => x.reference)
+      .filter((x): x is string => typeof x === 'string');
+  };
 
 export const ultimaAtualizacao = (reg: Registro): unknown[] => [reg.atualizadoEm];

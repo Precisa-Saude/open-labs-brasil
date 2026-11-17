@@ -20,7 +20,12 @@ export class ErroDeApi extends Error {
     codigo: string,
     issueCode: string,
     texto: string,
-    opcoes: { diagnostico?: string; wwwAuthenticate?: string; cabecalhos?: Record<string, string>; expressao?: string[] } = {},
+    opcoes: {
+      diagnostico?: string;
+      wwwAuthenticate?: string;
+      cabecalhos?: Record<string, string>;
+      expressao?: string[];
+    } = {},
   ) {
     super(`${codigo}: ${texto}`);
     this.status = status;
@@ -49,19 +54,19 @@ export class ErroOAuth extends Error {
 
 export function operationOutcome(erro: ErroDeApi, severidade: 'error' | 'information' = 'error') {
   return {
-    resourceType: 'OperationOutcome',
     issue: [
       {
-        severity: severidade,
         code: erro.issueCode,
         details: {
-          coding: [{ system: SISTEMA_DE_ERROS, code: erro.codigo }],
+          coding: [{ code: erro.codigo, system: SISTEMA_DE_ERROS }],
           text: erro.texto,
         },
+        severity: severidade,
         ...(erro.diagnostico ? { diagnostics: erro.diagnostico } : {}),
         ...(erro.expressao ? { expression: erro.expressao } : {}),
       },
     ],
+    resourceType: 'OperationOutcome',
   };
 }
 
@@ -71,7 +76,8 @@ export async function lerCorpo(req: IncomingMessage, limite = 1_000_000): Promis
   for await (const parte of req) {
     const b = parte as Buffer;
     total += b.length;
-    if (total > limite) throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', 'Corpo da requisição grande demais.');
+    if (total > limite)
+      throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', 'Corpo da requisição grande demais.');
     partes.push(b);
   }
   return Buffer.concat(partes);
@@ -89,39 +95,58 @@ export function lerFormulario(corpo: Buffer): Map<string, string[]> {
   return mapa;
 }
 
-export function enviarJson(res: ServerResponse, status: number, corpo: unknown, cabecalhos: Record<string, string> = {}) {
+export function enviarJson(
+  res: ServerResponse,
+  status: number,
+  corpo: unknown,
+  cabecalhos: Record<string, string> = {},
+) {
   const texto = JSON.stringify(corpo);
   res.writeHead(status, {
+    'Content-Length': Buffer.byteLength(texto),
     'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(texto),
     ...cabecalhos,
   });
   res.end(texto);
 }
 
-export function enviarFhir(res: ServerResponse, status: number, corpo: unknown, cabecalhos: Record<string, string> = {}) {
+export function enviarFhir(
+  res: ServerResponse,
+  status: number,
+  corpo: unknown,
+  cabecalhos: Record<string, string> = {},
+) {
   const texto = JSON.stringify(corpo);
   res.writeHead(status, {
-    'Content-Type': 'application/fhir+json; charset=utf-8',
     'Content-Length': Buffer.byteLength(texto),
+    'Content-Type': 'application/fhir+json; charset=utf-8',
     ...cabecalhos,
   });
   res.end(texto);
 }
 
-export function enviarHtml(res: ServerResponse, status: number, html: string, cabecalhos: Record<string, string> = {}) {
+export function enviarHtml(
+  res: ServerResponse,
+  status: number,
+  html: string,
+  cabecalhos: Record<string, string> = {},
+) {
   res.writeHead(status, {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Content-Length': Buffer.byteLength(html),
     'Cache-Control': 'no-store',
-    'X-Frame-Options': 'DENY',
+    'Content-Length': Buffer.byteLength(html),
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'",
+    'Content-Type': 'text/html; charset=utf-8',
+    'X-Frame-Options': 'DENY',
     ...cabecalhos,
   });
   res.end(html);
 }
 
-export function enviarVazio(res: ServerResponse, status: number, cabecalhos: Record<string, string> = {}) {
+export function enviarVazio(
+  res: ServerResponse,
+  status: number,
+  cabecalhos: Record<string, string> = {},
+) {
   res.writeHead(status, cabecalhos);
   res.end();
 }

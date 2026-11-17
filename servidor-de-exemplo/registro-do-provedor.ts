@@ -3,15 +3,16 @@
 
 import { readFileSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
+
 import {
   baixarRegistro,
-  verificarCandidato,
-  versaoEfetiva,
   type ChaveDoRegistro,
   type DocumentoAceito,
   type DocumentoDoRegistro,
   type Participante,
   type PassoDeVerificacao,
+  verificarCandidato,
+  versaoEfetiva,
 } from '../comum/registro.ts';
 import type { ConfiguracaoDoServidor, Relogio } from './configuracao.ts';
 
@@ -20,8 +21,8 @@ export type ModoDoRegistro = 'normal' | 'restrito' | 'bloqueado';
 export interface ResultadoDaRecarga {
   aceito: boolean;
   inalterado?: boolean;
-  passo?: PassoDeVerificacao;
   motivo?: string;
+  passo?: PassoDeVerificacao;
   sequencia: number;
 }
 
@@ -46,19 +47,25 @@ export class RegistroDoProvedor {
   }
 
   /** Carrega o primeiro documento do arquivo, verificado com o conjunto inicial de chaves. */
-  static async carregar(cfg: ConfiguracaoDoServidor, relogio: Relogio): Promise<RegistroDoProvedor> {
+  static async carregar(
+    cfg: ConfiguracaoDoServidor,
+    relogio: Relogio,
+  ): Promise<RegistroDoProvedor> {
     const bytes = new Uint8Array(readFileSync(cfg.registro.arquivo));
     const jws = readFileSync(cfg.registro.assinatura, 'utf8');
-    const iniciais = JSON.parse(readFileSync(cfg.registro.chavesIniciais, 'utf8')) as { keys: ChaveDoRegistro[] };
+    const iniciais = JSON.parse(readFileSync(cfg.registro.chavesIniciais, 'utf8')) as {
+      keys: ChaveDoRegistro[];
+    };
     const r = await verificarCandidato({
-      bytes,
-      jws,
-      chavesConfiaveis: iniciais.keys,
-      ambiente: cfg.registro.ambiente,
       agora: relogio.agora(),
+      ambiente: cfg.registro.ambiente,
+      bytes,
+      chavesConfiaveis: iniciais.keys,
+      jws,
     });
-    if (!r.aceito) throw new Error(`O registro inicial não passou na verificação: ${r.passo} ${r.motivo}`);
-    return new RegistroDoProvedor(cfg, relogio, { documento: r.documento, bytes });
+    if (!r.aceito)
+      throw new Error(`O registro inicial não passou na verificação: ${r.passo} ${r.motivo}`);
+    return new RegistroDoProvedor(cfg, relogio, { bytes, documento: r.documento });
   }
 
   get documento(): DocumentoDoRegistro {
@@ -74,8 +81,15 @@ export class RegistroDoProvedor {
       const ca = [...rootCertificates, readFileSync(this.cfg.tls.caConfiavel, 'utf8')];
       const baixado = await baixarRegistro(this.cfg.registro.url, { ca: ca.join('\n') });
       if ('erro' in baixado) {
-        this.aoAvisar(`Registro não baixado (${baixado.erro}). Mantido o documento ${this.documento.sequence}.`);
-        return { aceito: false, passo: 'V1', motivo: baixado.erro, sequencia: this.documento.sequence };
+        this.aoAvisar(
+          `Registro não baixado (${baixado.erro}). Mantido o documento ${this.documento.sequence}.`,
+        );
+        return {
+          aceito: false,
+          motivo: baixado.erro,
+          passo: 'V1',
+          sequencia: this.documento.sequence,
+        };
       }
       bytes = baixado.bytes;
       jws = baixado.jws;
@@ -84,7 +98,12 @@ export class RegistroDoProvedor {
         bytes = new Uint8Array(readFileSync(this.cfg.registro.arquivo));
         jws = readFileSync(this.cfg.registro.assinatura, 'utf8');
       } catch (e) {
-        return { aceito: false, passo: 'V1', motivo: (e as Error).message, sequencia: this.documento.sequence };
+        return {
+          aceito: false,
+          motivo: (e as Error).message,
+          passo: 'V1',
+          sequencia: this.documento.sequence,
+        };
       }
     }
     const pular: PassoDeVerificacao[] = [];
@@ -95,35 +114,54 @@ export class RegistroDoProvedor {
     if (this.cfg.violacoes.has('registro-aceita-crit')) pular.push('V3');
     const cabecalho = (() => {
       try {
-        return JSON.parse(Buffer.from(jws.trim().split('.')[0] ?? '', 'base64url').toString('utf8')) as Record<string, unknown>;
+        return JSON.parse(
+          Buffer.from(jws.trim().split('.')[0] ?? '', 'base64url').toString('utf8'),
+        ) as Record<string, unknown>;
       } catch {
         return {};
       }
     })();
     if (this.cfg.violacoes.has('registro-exige-typ-jose') && cabecalho.typ !== 'JOSE') {
-      return { aceito: false, passo: 'V3', motivo: 'typ diferente de JOSE (violação deliberada)', sequencia: this.documento.sequence };
+      return {
+        aceito: false,
+        motivo: 'typ diferente de JOSE (violação deliberada)',
+        passo: 'V3',
+        sequencia: this.documento.sequence,
+      };
     }
     if (this.cfg.violacoes.has('registro-usa-jwk-do-cabecalho') && cabecalho.jwk) {
       // Só no modo de violações: verificar com a chave do cabeçalho, o que falha quando ela não é a do registro.
-      return { aceito: false, passo: 'V6', motivo: 'assinatura conferida com jwk do cabeçalho (violação deliberada)', sequencia: this.documento.sequence };
+      return {
+        aceito: false,
+        motivo: 'assinatura conferida com jwk do cabeçalho (violação deliberada)',
+        passo: 'V6',
+        sequencia: this.documento.sequence,
+      };
     }
     const r = await verificarCandidato({
-      bytes,
-      jws,
-      chavesConfiaveis: this.documento.registry_keys.keys,
+      agora: this.relogio.agora(),
       ambiente: this.cfg.registro.ambiente,
       atual: this.atual,
-      agora: this.relogio.agora(),
+      bytes,
+      chavesConfiaveis: this.documento.registry_keys.keys,
+      jws,
       pular,
     });
     if (!r.aceito) {
       // Seção 8.3: quem recusa continua com o documento atual e avisa o mantenedor.
-      this.aoAvisar(`Candidato recusado no passo ${r.passo}: ${r.motivo}. Avise o mantenedor do registro.`);
-      return { aceito: false, passo: r.passo, motivo: r.motivo, sequencia: this.documento.sequence };
+      this.aoAvisar(
+        `Candidato recusado no passo ${r.passo}: ${r.motivo}. Avise o mantenedor do registro.`,
+      );
+      return {
+        aceito: false,
+        motivo: r.motivo,
+        passo: r.passo,
+        sequencia: this.documento.sequence,
+      };
     }
     if (r.inalterado) return { aceito: true, inalterado: true, sequencia: this.documento.sequence };
     const anterior = this.documento;
-    this.atual = { documento: r.documento, bytes };
+    this.atual = { bytes, documento: r.documento };
     this.aoAceitar(anterior, r.documento);
     return { aceito: true, sequencia: r.documento.sequence };
   }
@@ -145,13 +183,17 @@ export class RegistroDoProvedor {
   }
 
   provedor(): Participante {
-    const p = this.documento.participants.find((x) => x.participant_id === this.cfg.participantId && x.role === 'provider');
+    const p = this.documento.participants.find(
+      (x) => x.participant_id === this.cfg.participantId && x.role === 'provider',
+    );
     if (!p?.provider) throw new Error('O provedor não está no registro');
     return p;
   }
 
   receptor(clientId: string): Participante | undefined {
-    return this.documento.participants.find((p) => p.role === 'receiver' && p.receiver?.client_id === clientId);
+    return this.documento.participants.find(
+      (p) => p.role === 'receiver' && p.receiver?.client_id === clientId,
+    );
   }
 
   /** Receptor dono do certificado, em qualquer situação, com o certificado dentro da validade. */
@@ -161,7 +203,10 @@ export class RegistroDoProvedor {
       (p) =>
         p.role === 'receiver' &&
         p.receiver?.transport_certificates.some(
-          (c) => c['x5t#S256'] === x5t && Date.parse(c.not_before) <= agora && agora <= Date.parse(c.not_after),
+          (c) =>
+            c['x5t#S256'] === x5t &&
+            Date.parse(c.not_before) <= agora &&
+            agora <= Date.parse(c.not_after),
         ),
     );
   }
@@ -172,6 +217,9 @@ export class RegistroDoProvedor {
     const efetiva = versaoEfetiva(this.provedor().protocol_versions, receptor.protocol_versions);
     if (efetiva === undefined) return false;
     // Seção 9.1, passo 5: a versão efetiva que o software não implementa conta como inexistente.
-    return VERSOES_IMPLEMENTADAS.includes(efetiva) || this.cfg.violacoes.has('versao-nao-implementada-aceita');
+    return (
+      VERSOES_IMPLEMENTADAS.includes(efetiva) ||
+      this.cfg.violacoes.has('versao-nao-implementada-aceita')
+    );
   }
 }

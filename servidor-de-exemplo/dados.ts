@@ -22,200 +22,637 @@ export const URL_PAYMENT_LINK = 'https://fhir-brasil.dev.br/ig/StructureDefiniti
 /** Sistema de códigos próprio do laboratório fictício. */
 export const SISTEMA_PRODUTOS = 'https://laboratorio.example/fhir/produtos';
 export const BASE_CANONICA = 'https://laboratorio.example/fhir';
-export const ORGANIZACAO = { reference: 'Organization/laboratorio-exemplo', display: 'Laboratório Exemplo (simulado)' };
+export const ORGANIZACAO = {
+  display: 'Laboratório Exemplo (simulado)',
+  reference: 'Organization/laboratorio-exemplo',
+};
 
 export type Recurso = Record<string, unknown> & { resourceType: string; id: string };
 
 export interface Registro {
-  recurso: Recurso;
-  versao: number;
   atualizadoEm: number;
-  /** Paciente dono do recurso, para recursos de paciente. */
-  pacienteId?: string;
-  /** Laudo liberado ao paciente nos canais do provedor. */
-  liberado?: boolean;
   /** client_id do receptor que criou o agendamento pelo protocolo. Ausente: outro canal. */
   donoClientId?: string;
+  /** Laudo liberado ao paciente nos canais do provedor. */
+  liberado?: boolean;
+  /** Paciente dono do recurso, para recursos de paciente. */
+  pacienteId?: string;
+  recurso: Recurso;
+  versao: number;
 }
 
 export interface Unidade {
-  id: string;
-  nome: string;
+  cep: string;
   cidade: string;
   ibge: string;
-  uf: string;
-  cep: string;
-  linha: string;
+  id: string;
   latitude: number;
+  linha: string;
   longitude: number;
+  nome: string;
+  uf: string;
 }
 
 export const UNIDADES: Unidade[] = [
-  { id: 'unidade-centro', nome: 'Laboratório Exemplo, unidade Centro', cidade: 'Porto Alegre', ibge: '4314902', uf: 'RS', cep: '90010-000', linha: 'Rua Exemplo, 100', latitude: -30.03, longitude: -51.23 },
-  { id: 'unidade-zona-norte', nome: 'Laboratório Exemplo, unidade Zona Norte', cidade: 'Porto Alegre', ibge: '4314902', uf: 'RS', cep: '91000-000', linha: 'Avenida Fictícia, 2000', latitude: -30.0, longitude: -51.18 },
-  { id: 'unidade-canoas', nome: 'Laboratório Exemplo, unidade Canoas', cidade: 'Canoas', ibge: '4304606', uf: 'RS', cep: '92000-000', linha: 'Rua Imaginária, 45', latitude: -29.92, longitude: -51.18 },
+  {
+    cep: '90010-000',
+    cidade: 'Porto Alegre',
+    ibge: '4314902',
+    id: 'unidade-centro',
+    latitude: -30.03,
+    linha: 'Rua Exemplo, 100',
+    longitude: -51.23,
+    nome: 'Laboratório Exemplo, unidade Centro',
+    uf: 'RS',
+  },
+  {
+    cep: '91000-000',
+    cidade: 'Porto Alegre',
+    ibge: '4314902',
+    id: 'unidade-zona-norte',
+    latitude: -30.0,
+    linha: 'Avenida Fictícia, 2000',
+    longitude: -51.18,
+    nome: 'Laboratório Exemplo, unidade Zona Norte',
+    uf: 'RS',
+  },
+  {
+    cep: '92000-000',
+    cidade: 'Canoas',
+    ibge: '4304606',
+    id: 'unidade-canoas',
+    latitude: -29.92,
+    linha: 'Rua Imaginária, 45',
+    longitude: -51.18,
+    nome: 'Laboratório Exemplo, unidade Canoas',
+    uf: 'RS',
+  },
 ];
 
 export interface Exame {
-  id: string;
-  titulo: string;
-  loinc?: { code: string; display: string };
-  codigoProprio: string;
-  status: 'active' | 'retired';
-  /** Unidades que coletam o exame. Ausente: todas. */
-  unidades?: string[];
   /** Só pode ser coletado em horários que começam antes desta hora local. */
   antesDas?: string;
+  codigoProprio: string;
+  id: string;
+  loinc?: { code: string; display: string };
   /** Preço base em reais por município (código IBGE). */
   preco: number;
+  status: 'active' | 'retired';
+  titulo: string;
+  /** Unidades que coletam o exame. Ausente: todas. */
+  unidades?: string[];
 }
 
 export const EXAMES: Exame[] = [
-  { id: 'glicose', titulo: 'Glicose', loinc: { code: '2345-7', display: 'Glucose [Mass/volume] in Serum or Plasma' }, codigoProprio: 'GLI', status: 'active', preco: 14 },
-  { id: 'hemograma', titulo: 'Hemograma completo', loinc: { code: '58410-2', display: 'CBC panel - Blood by Automated count' }, codigoProprio: 'HMG', status: 'active', preco: 22 },
-  { id: 'colesterol-total', titulo: 'Colesterol total', loinc: { code: '2093-3', display: 'Cholesterol [Mass/volume] in Serum or Plasma' }, codigoProprio: 'COL', status: 'active', preco: 15 },
-  { id: 'colesterol-hdl', titulo: 'Colesterol HDL', loinc: { code: '2085-9', display: 'Cholesterol in HDL [Mass/volume] in Serum or Plasma' }, codigoProprio: 'HDL', status: 'active', preco: 16 },
-  { id: 'colesterol-ldl', titulo: 'Colesterol LDL (calculado)', loinc: { code: '13457-7', display: 'Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation' }, codigoProprio: 'LDL', status: 'active', preco: 16 },
-  { id: 'triglicerideos', titulo: 'Triglicerídeos', loinc: { code: '2571-8', display: 'Triglyceride [Mass/volume] in Serum or Plasma' }, codigoProprio: 'TRI', status: 'active', preco: 15 },
-  { id: 'creatinina', titulo: 'Creatinina', loinc: { code: '2160-0', display: 'Creatinine [Mass/volume] in Serum or Plasma' }, codigoProprio: 'CRE', status: 'active', preco: 13 },
-  { id: 'tsh', titulo: 'TSH (hormônio tireoestimulante)', loinc: { code: '3016-3', display: 'Thyrotropin [Units/volume] in Serum or Plasma' }, codigoProprio: 'TSH', status: 'active', preco: 35 },
-  { id: 't4-livre', titulo: 'T4 livre', loinc: { code: '3024-7', display: 'Thyroxine (T4) free [Mass/volume] in Serum or Plasma' }, codigoProprio: 'T4L', status: 'active', preco: 33 },
-  { id: 'hemoglobina-glicada', titulo: 'Hemoglobina glicada (HbA1c)', loinc: { code: '4548-4', display: 'Hemoglobin A1c/Hemoglobin.total in Blood' }, codigoProprio: 'HBA1C', status: 'active', preco: 28 },
-  { id: 'acido-urico', titulo: 'Ácido úrico', loinc: { code: '3084-1', display: 'Urate [Mass/volume] in Serum or Plasma' }, codigoProprio: 'AUR', status: 'active', preco: 14 },
-  { id: 'tgo', titulo: 'TGO (AST)', loinc: { code: '1920-8', display: 'Aspartate aminotransferase [Enzymatic activity/volume] in Serum or Plasma' }, codigoProprio: 'TGO', status: 'active', preco: 14 },
-  { id: 'tgp', titulo: 'TGP (ALT)', loinc: { code: '1742-6', display: 'Alanine aminotransferase [Enzymatic activity/volume] in Serum or Plasma' }, codigoProprio: 'TGP', status: 'active', preco: 14 },
-  { id: 'gama-gt', titulo: 'Gama GT', loinc: { code: '2324-2', display: 'Gamma glutamyl transferase [Enzymatic activity/volume] in Serum or Plasma' }, codigoProprio: 'GGT', status: 'active', preco: 16 },
-  { id: 'ferritina', titulo: 'Ferritina', loinc: { code: '2276-4', display: 'Ferritin [Mass/volume] in Serum or Plasma' }, codigoProprio: 'FER', status: 'active', preco: 38 },
-  { id: 'vitamina-b12', titulo: 'Vitamina B12', loinc: { code: '2132-9', display: 'Cobalamin (Vitamin B12) [Mass/volume] in Serum or Plasma' }, codigoProprio: 'B12', status: 'active', preco: 42 },
-  { id: 'proteina-c-reativa', titulo: 'Proteína C reativa', loinc: { code: '1988-5', display: 'C reactive protein [Mass/volume] in Serum or Plasma' }, codigoProprio: 'PCR', status: 'active', preco: 25 },
-  { id: 'insulina', titulo: 'Insulina', loinc: { code: '20448-7', display: 'Insulin [Units/volume] in Serum or Plasma' }, codigoProprio: 'INS', status: 'active', preco: 36 },
-  { id: 'potassio', titulo: 'Potássio', loinc: { code: '2823-3', display: 'Potassium [Moles/volume] in Serum or Plasma' }, codigoProprio: 'K', status: 'active', preco: 12 },
-  { id: 'sodio', titulo: 'Sódio', loinc: { code: '2951-2', display: 'Sodium [Moles/volume] in Serum or Plasma' }, codigoProprio: 'NA', status: 'active', preco: 12 },
-  { id: 'psa', titulo: 'PSA total', loinc: { code: '2857-1', display: 'Prostate specific Ag [Mass/volume] in Serum or Plasma' }, codigoProprio: 'PSA', status: 'active', preco: 40 },
-  { id: 'urina-tipo-1', titulo: 'Urina tipo 1 (EAS)', loinc: { code: '24356-8', display: 'Urinalysis complete panel - Urine' }, codigoProprio: 'EAS', status: 'active', preco: 18 },
+  {
+    codigoProprio: 'GLI',
+    id: 'glicose',
+    loinc: { code: '2345-7', display: 'Glucose [Mass/volume] in Serum or Plasma' },
+    preco: 14,
+    status: 'active',
+    titulo: 'Glicose',
+  },
+  {
+    codigoProprio: 'HMG',
+    id: 'hemograma',
+    loinc: { code: '58410-2', display: 'CBC panel - Blood by Automated count' },
+    preco: 22,
+    status: 'active',
+    titulo: 'Hemograma completo',
+  },
+  {
+    codigoProprio: 'COL',
+    id: 'colesterol-total',
+    loinc: { code: '2093-3', display: 'Cholesterol [Mass/volume] in Serum or Plasma' },
+    preco: 15,
+    status: 'active',
+    titulo: 'Colesterol total',
+  },
+  {
+    codigoProprio: 'HDL',
+    id: 'colesterol-hdl',
+    loinc: { code: '2085-9', display: 'Cholesterol in HDL [Mass/volume] in Serum or Plasma' },
+    preco: 16,
+    status: 'active',
+    titulo: 'Colesterol HDL',
+  },
+  {
+    codigoProprio: 'LDL',
+    id: 'colesterol-ldl',
+    loinc: {
+      code: '13457-7',
+      display: 'Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation',
+    },
+    preco: 16,
+    status: 'active',
+    titulo: 'Colesterol LDL (calculado)',
+  },
+  {
+    codigoProprio: 'TRI',
+    id: 'triglicerideos',
+    loinc: { code: '2571-8', display: 'Triglyceride [Mass/volume] in Serum or Plasma' },
+    preco: 15,
+    status: 'active',
+    titulo: 'Triglicerídeos',
+  },
+  {
+    codigoProprio: 'CRE',
+    id: 'creatinina',
+    loinc: { code: '2160-0', display: 'Creatinine [Mass/volume] in Serum or Plasma' },
+    preco: 13,
+    status: 'active',
+    titulo: 'Creatinina',
+  },
+  {
+    codigoProprio: 'TSH',
+    id: 'tsh',
+    loinc: { code: '3016-3', display: 'Thyrotropin [Units/volume] in Serum or Plasma' },
+    preco: 35,
+    status: 'active',
+    titulo: 'TSH (hormônio tireoestimulante)',
+  },
+  {
+    codigoProprio: 'T4L',
+    id: 't4-livre',
+    loinc: { code: '3024-7', display: 'Thyroxine (T4) free [Mass/volume] in Serum or Plasma' },
+    preco: 33,
+    status: 'active',
+    titulo: 'T4 livre',
+  },
+  {
+    codigoProprio: 'HBA1C',
+    id: 'hemoglobina-glicada',
+    loinc: { code: '4548-4', display: 'Hemoglobin A1c/Hemoglobin.total in Blood' },
+    preco: 28,
+    status: 'active',
+    titulo: 'Hemoglobina glicada (HbA1c)',
+  },
+  {
+    codigoProprio: 'AUR',
+    id: 'acido-urico',
+    loinc: { code: '3084-1', display: 'Urate [Mass/volume] in Serum or Plasma' },
+    preco: 14,
+    status: 'active',
+    titulo: 'Ácido úrico',
+  },
+  {
+    codigoProprio: 'TGO',
+    id: 'tgo',
+    loinc: {
+      code: '1920-8',
+      display: 'Aspartate aminotransferase [Enzymatic activity/volume] in Serum or Plasma',
+    },
+    preco: 14,
+    status: 'active',
+    titulo: 'TGO (AST)',
+  },
+  {
+    codigoProprio: 'TGP',
+    id: 'tgp',
+    loinc: {
+      code: '1742-6',
+      display: 'Alanine aminotransferase [Enzymatic activity/volume] in Serum or Plasma',
+    },
+    preco: 14,
+    status: 'active',
+    titulo: 'TGP (ALT)',
+  },
+  {
+    codigoProprio: 'GGT',
+    id: 'gama-gt',
+    loinc: {
+      code: '2324-2',
+      display: 'Gamma glutamyl transferase [Enzymatic activity/volume] in Serum or Plasma',
+    },
+    preco: 16,
+    status: 'active',
+    titulo: 'Gama GT',
+  },
+  {
+    codigoProprio: 'FER',
+    id: 'ferritina',
+    loinc: { code: '2276-4', display: 'Ferritin [Mass/volume] in Serum or Plasma' },
+    preco: 38,
+    status: 'active',
+    titulo: 'Ferritina',
+  },
+  {
+    codigoProprio: 'B12',
+    id: 'vitamina-b12',
+    loinc: { code: '2132-9', display: 'Cobalamin (Vitamin B12) [Mass/volume] in Serum or Plasma' },
+    preco: 42,
+    status: 'active',
+    titulo: 'Vitamina B12',
+  },
+  {
+    codigoProprio: 'PCR',
+    id: 'proteina-c-reativa',
+    loinc: { code: '1988-5', display: 'C reactive protein [Mass/volume] in Serum or Plasma' },
+    preco: 25,
+    status: 'active',
+    titulo: 'Proteína C reativa',
+  },
+  {
+    codigoProprio: 'INS',
+    id: 'insulina',
+    loinc: { code: '20448-7', display: 'Insulin [Units/volume] in Serum or Plasma' },
+    preco: 36,
+    status: 'active',
+    titulo: 'Insulina',
+  },
+  {
+    codigoProprio: 'K',
+    id: 'potassio',
+    loinc: { code: '2823-3', display: 'Potassium [Moles/volume] in Serum or Plasma' },
+    preco: 12,
+    status: 'active',
+    titulo: 'Potássio',
+  },
+  {
+    codigoProprio: 'NA',
+    id: 'sodio',
+    loinc: { code: '2951-2', display: 'Sodium [Moles/volume] in Serum or Plasma' },
+    preco: 12,
+    status: 'active',
+    titulo: 'Sódio',
+  },
+  {
+    codigoProprio: 'PSA',
+    id: 'psa',
+    loinc: { code: '2857-1', display: 'Prostate specific Ag [Mass/volume] in Serum or Plasma' },
+    preco: 40,
+    status: 'active',
+    titulo: 'PSA total',
+  },
+  {
+    codigoProprio: 'EAS',
+    id: 'urina-tipo-1',
+    loinc: { code: '24356-8', display: 'Urinalysis complete panel - Urine' },
+    preco: 18,
+    status: 'active',
+    titulo: 'Urina tipo 1 (EAS)',
+  },
   // Sem LOINC: combo, curva com horário restrito, exame só em uma unidade, item gratuito.
-  { id: 'curva-glicemica', titulo: 'Curva glicêmica (TOTG 75 g)', codigoProprio: 'TOTG', status: 'active', antesDas: '08:00', preco: 45 },
-  { id: 'espermograma', titulo: 'Espermograma', codigoProprio: 'ESP', status: 'active', unidades: ['unidade-centro'], preco: 90 },
-  { id: 'combo-check-up', titulo: 'Combo check-up básico', codigoProprio: 'COMBO-CHECKUP', status: 'active', preco: 99 },
-  { id: 'glicemia-capilar-campanha', titulo: 'Glicemia capilar (campanha, sem custo)', codigoProprio: 'GLICAP', status: 'active', preco: 0 },
+  {
+    antesDas: '08:00',
+    codigoProprio: 'TOTG',
+    id: 'curva-glicemica',
+    preco: 45,
+    status: 'active',
+    titulo: 'Curva glicêmica (TOTG 75 g)',
+  },
+  {
+    codigoProprio: 'ESP',
+    id: 'espermograma',
+    preco: 90,
+    status: 'active',
+    titulo: 'Espermograma',
+    unidades: ['unidade-centro'],
+  },
+  {
+    codigoProprio: 'COMBO-CHECKUP',
+    id: 'combo-check-up',
+    preco: 99,
+    status: 'active',
+    titulo: 'Combo check-up básico',
+  },
+  {
+    codigoProprio: 'GLICAP',
+    id: 'glicemia-capilar-campanha',
+    preco: 0,
+    status: 'active',
+    titulo: 'Glicemia capilar (campanha, sem custo)',
+  },
   // Retirado: continua legível com status retired.
-  { id: 'mucoproteinas', titulo: 'Mucoproteínas (descontinuado)', codigoProprio: 'MUCO', status: 'retired', preco: 20 },
+  {
+    codigoProprio: 'MUCO',
+    id: 'mucoproteinas',
+    preco: 20,
+    status: 'retired',
+    titulo: 'Mucoproteínas (descontinuado)',
+  },
 ];
 
-export function codingsDoExame(exame: Exame): Array<{ system: string; code: string; display: string }> {
+export function codingsDoExame(
+  exame: Exame,
+): Array<{ system: string; code: string; display: string }> {
   const lista: Array<{ system: string; code: string; display: string }> = [];
-  if (exame.loinc) lista.push({ system: SISTEMA_LOINC, code: exame.loinc.code, display: exame.loinc.display });
-  lista.push({ system: SISTEMA_PRODUTOS, code: exame.codigoProprio, display: exame.titulo });
+  if (exame.loinc)
+    lista.push({ code: exame.loinc.code, display: exame.loinc.display, system: SISTEMA_LOINC });
+  lista.push({ code: exame.codigoProprio, display: exame.titulo, system: SISTEMA_PRODUTOS });
   return lista;
 }
 
 export interface Paciente {
-  id: string;
-  usuario: string;
-  nome: { given: string[]; family: string };
-  cpf?: string;
   cns?: string;
+  cpf?: string;
+  id: string;
   nascimento: string;
+  nome: { given: string[]; family: string };
   sexo: 'female' | 'male';
+  usuario: string;
 }
 
 export const SENHA_DE_TESTE = 'teste';
 
 export const PACIENTES: Paciente[] = [
-  { id: 'pac-ana', usuario: 'ana', nome: { given: ['Ana'], family: 'Exemplo Sintética' }, cpf: completarCpf('529982247'), nascimento: '1985-04-12', sexo: 'female' },
-  { id: 'pac-bruno', usuario: 'bruno', nome: { given: ['Bruno'], family: 'Exemplo Sintético' }, cpf: completarCpf('111444777'), nascimento: '1979-09-30', sexo: 'male' },
-  { id: 'pac-carla', usuario: 'carla', nome: { given: ['Carla'], family: 'Sem CPF Sintética' }, cns: completarCnsProvisorio('89800000000001'), nascimento: '1992-01-20', sexo: 'female' },
+  {
+    cpf: completarCpf('529982247'),
+    id: 'pac-ana',
+    nascimento: '1985-04-12',
+    nome: { family: 'Exemplo Sintética', given: ['Ana'] },
+    sexo: 'female',
+    usuario: 'ana',
+  },
+  {
+    cpf: completarCpf('111444777'),
+    id: 'pac-bruno',
+    nascimento: '1979-09-30',
+    nome: { family: 'Exemplo Sintético', given: ['Bruno'] },
+    sexo: 'male',
+    usuario: 'bruno',
+  },
+  {
+    cns: completarCnsProvisorio('89800000000001'),
+    id: 'pac-carla',
+    nascimento: '1992-01-20',
+    nome: { family: 'Sem CPF Sintética', given: ['Carla'] },
+    sexo: 'female',
+    usuario: 'carla',
+  },
   // CPF de preenchimento no cadastro: passa no cálculo dos dígitos e é inválido pela seção 4.4 (CNS-025).
-  { id: 'pac-diego', usuario: 'diego', nome: { given: ['Diego'], family: 'CPF Inválido Sintético' }, cpf: '00000000000', nascimento: '1988-07-03', sexo: 'male' },
+  {
+    cpf: '00000000000',
+    id: 'pac-diego',
+    nascimento: '1988-07-03',
+    nome: { family: 'CPF Inválido Sintético', given: ['Diego'] },
+    sexo: 'male',
+    usuario: 'diego',
+  },
 ];
 
 /** Identificadores que a configuração da suíte usa para os testes de resultados e agendamento. */
 export const FIXTURAS = {
-  laudosNaoLiberados: ['laudo-ana-2026-parcial', 'laudo-ana-2026-retido'],
-  laudoAntigo: { id: 'laudo-ana-2020-glicemia', data: '2020-03-10' },
-  laudoParaRetificar: 'laudo-ana-2026-rotina',
   agendamentoDeOutroCanal: 'ag-outro-canal-ana',
-  unidadeDosTestes: 'unidade-centro',
   exameComum: `${SISTEMA_LOINC}|2345-7`,
+  exameIndisponivel: { exame: `${SISTEMA_PRODUTOS}|ESP`, unidade: 'unidade-canoas' },
   exameRestrito: `${SISTEMA_PRODUTOS}|TOTG`,
-  exameIndisponivel: { unidade: 'unidade-canoas', exame: `${SISTEMA_PRODUTOS}|ESP` },
+  laudoAntigo: { data: '2020-03-10', id: 'laudo-ana-2020-glicemia' },
+  laudoParaRetificar: 'laudo-ana-2026-rotina',
+  laudosNaoLiberados: ['laudo-ana-2026-parcial', 'laudo-ana-2026-retido'],
+  unidadeDosTestes: 'unidade-centro',
 };
 
 interface ResultadoSintetico {
+  alto?: number;
+  baixo?: number;
   exame: string;
   loinc: string;
   nome: string;
-  valor: number;
-  unidade: string;
   ucum: string;
-  baixo?: number;
-  alto?: number;
+  unidade: string;
+  valor: number;
 }
 
 interface LaudoSintetico {
-  id: string;
-  paciente: string;
-  data: string;
-  status: 'final' | 'amended' | 'corrected' | 'preliminary';
-  liberado: boolean;
-  titulo: string;
   codigo: { system: string; code: string; display: string };
+  data: string;
+  id: string;
+  liberado: boolean;
+  paciente: string;
   resultados: ResultadoSintetico[];
+  status: 'final' | 'amended' | 'corrected' | 'preliminary';
+  titulo: string;
 }
 
 const LAUDOS: LaudoSintetico[] = [
   {
-    id: 'laudo-ana-2020-glicemia', paciente: 'pac-ana', data: '2020-03-10T08:10:00-03:00', status: 'final', liberado: true,
-    titulo: 'Glicemia de jejum', codigo: { system: SISTEMA_LOINC, code: '2345-7', display: 'Glucose [Mass/volume] in Serum or Plasma' },
-    resultados: [{ exame: 'glicose', loinc: '2345-7', nome: 'Glicose', valor: 91, unidade: 'mg/dL', ucum: 'mg/dL', baixo: 70, alto: 99 }],
-  },
-  {
-    id: 'laudo-ana-2024-lipidograma', paciente: 'pac-ana', data: '2024-05-20T07:40:00-03:00', status: 'final', liberado: true,
-    titulo: 'Perfil lipídico', codigo: { system: SISTEMA_PRODUTOS, code: 'PERFIL-LIPIDICO', display: 'Perfil lipídico' },
+    codigo: {
+      code: '2345-7',
+      display: 'Glucose [Mass/volume] in Serum or Plasma',
+      system: SISTEMA_LOINC,
+    },
+    data: '2020-03-10T08:10:00-03:00',
+    id: 'laudo-ana-2020-glicemia',
+    liberado: true,
+    paciente: 'pac-ana',
     resultados: [
-      { exame: 'col', loinc: '2093-3', nome: 'Colesterol total', valor: 182, unidade: 'mg/dL', ucum: 'mg/dL', alto: 190 },
-      { exame: 'hdl', loinc: '2085-9', nome: 'Colesterol HDL', valor: 58, unidade: 'mg/dL', ucum: 'mg/dL', baixo: 40 },
-      { exame: 'tri', loinc: '2571-8', nome: 'Triglicerídeos', valor: 110, unidade: 'mg/dL', ucum: 'mg/dL', alto: 150 },
+      {
+        alto: 99,
+        baixo: 70,
+        exame: 'glicose',
+        loinc: '2345-7',
+        nome: 'Glicose',
+        ucum: 'mg/dL',
+        unidade: 'mg/dL',
+        valor: 91,
+      },
     ],
+    status: 'final',
+    titulo: 'Glicemia de jejum',
   },
   {
-    id: 'laudo-ana-2025-tireoide', paciente: 'pac-ana', data: '2025-08-02T08:00:00-03:00', status: 'amended', liberado: true,
-    titulo: 'TSH', codigo: { system: SISTEMA_LOINC, code: '3016-3', display: 'Thyrotropin [Units/volume] in Serum or Plasma' },
-    resultados: [{ exame: 'tsh', loinc: '3016-3', nome: 'TSH', valor: 2.1, unidade: 'mUI/L', ucum: 'm[IU]/L', baixo: 0.4, alto: 4.5 }],
-  },
-  {
-    id: 'laudo-ana-2026-rotina', paciente: 'pac-ana', data: '2026-10-01T07:30:00-03:00', status: 'final', liberado: true,
-    titulo: 'Exames de rotina', codigo: { system: SISTEMA_PRODUTOS, code: 'ROTINA', display: 'Exames de rotina' },
+    codigo: { code: 'PERFIL-LIPIDICO', display: 'Perfil lipídico', system: SISTEMA_PRODUTOS },
+    data: '2024-05-20T07:40:00-03:00',
+    id: 'laudo-ana-2024-lipidograma',
+    liberado: true,
+    paciente: 'pac-ana',
     resultados: [
-      { exame: 'gli', loinc: '2345-7', nome: 'Glicose', valor: 96, unidade: 'mg/dL', ucum: 'mg/dL', baixo: 70, alto: 99 },
-      { exame: 'hba1c', loinc: '4548-4', nome: 'Hemoglobina glicada', valor: 5.4, unidade: '%', ucum: '%', alto: 5.7 },
-      { exame: 'cre', loinc: '2160-0', nome: 'Creatinina', valor: 0.8, unidade: 'mg/dL', ucum: 'mg/dL', baixo: 0.5, alto: 1.1 },
-      { exame: 'hb', loinc: '718-7', nome: 'Hemoglobina', valor: 13.6, unidade: 'g/dL', ucum: 'g/dL', baixo: 12, alto: 16 },
+      {
+        alto: 190,
+        exame: 'col',
+        loinc: '2093-3',
+        nome: 'Colesterol total',
+        ucum: 'mg/dL',
+        unidade: 'mg/dL',
+        valor: 182,
+      },
+      {
+        baixo: 40,
+        exame: 'hdl',
+        loinc: '2085-9',
+        nome: 'Colesterol HDL',
+        ucum: 'mg/dL',
+        unidade: 'mg/dL',
+        valor: 58,
+      },
+      {
+        alto: 150,
+        exame: 'tri',
+        loinc: '2571-8',
+        nome: 'Triglicerídeos',
+        ucum: 'mg/dL',
+        unidade: 'mg/dL',
+        valor: 110,
+      },
     ],
+    status: 'final',
+    titulo: 'Perfil lipídico',
   },
   {
-    id: 'laudo-ana-2026-parcial', paciente: 'pac-ana', data: '2026-11-10T07:30:00-03:00', status: 'preliminary', liberado: false,
-    titulo: 'Ferritina (parcial)', codigo: { system: SISTEMA_LOINC, code: '2276-4', display: 'Ferritin [Mass/volume] in Serum or Plasma' },
-    resultados: [{ exame: 'fer', loinc: '2276-4', nome: 'Ferritina', valor: 85, unidade: 'ng/mL', ucum: 'ng/mL', baixo: 15, alto: 150 }],
+    codigo: {
+      code: '3016-3',
+      display: 'Thyrotropin [Units/volume] in Serum or Plasma',
+      system: SISTEMA_LOINC,
+    },
+    data: '2025-08-02T08:00:00-03:00',
+    id: 'laudo-ana-2025-tireoide',
+    liberado: true,
+    paciente: 'pac-ana',
+    resultados: [
+      {
+        alto: 4.5,
+        baixo: 0.4,
+        exame: 'tsh',
+        loinc: '3016-3',
+        nome: 'TSH',
+        ucum: 'm[IU]/L',
+        unidade: 'mUI/L',
+        valor: 2.1,
+      },
+    ],
+    status: 'amended',
+    titulo: 'TSH',
   },
   {
-    id: 'laudo-ana-2026-retido', paciente: 'pac-ana', data: '2026-11-12T07:30:00-03:00', status: 'final', liberado: false,
-    titulo: 'Vitamina B12 (aguardando liberação)', codigo: { system: SISTEMA_LOINC, code: '2132-9', display: 'Cobalamin (Vitamin B12) [Mass/volume] in Serum or Plasma' },
-    resultados: [{ exame: 'b12', loinc: '2132-9', nome: 'Vitamina B12', valor: 410, unidade: 'pg/mL', ucum: 'pg/mL', baixo: 200, alto: 900 }],
+    codigo: { code: 'ROTINA', display: 'Exames de rotina', system: SISTEMA_PRODUTOS },
+    data: '2026-10-01T07:30:00-03:00',
+    id: 'laudo-ana-2026-rotina',
+    liberado: true,
+    paciente: 'pac-ana',
+    resultados: [
+      {
+        alto: 99,
+        baixo: 70,
+        exame: 'gli',
+        loinc: '2345-7',
+        nome: 'Glicose',
+        ucum: 'mg/dL',
+        unidade: 'mg/dL',
+        valor: 96,
+      },
+      {
+        alto: 5.7,
+        exame: 'hba1c',
+        loinc: '4548-4',
+        nome: 'Hemoglobina glicada',
+        ucum: '%',
+        unidade: '%',
+        valor: 5.4,
+      },
+      {
+        alto: 1.1,
+        baixo: 0.5,
+        exame: 'cre',
+        loinc: '2160-0',
+        nome: 'Creatinina',
+        ucum: 'mg/dL',
+        unidade: 'mg/dL',
+        valor: 0.8,
+      },
+      {
+        alto: 16,
+        baixo: 12,
+        exame: 'hb',
+        loinc: '718-7',
+        nome: 'Hemoglobina',
+        ucum: 'g/dL',
+        unidade: 'g/dL',
+        valor: 13.6,
+      },
+    ],
+    status: 'final',
+    titulo: 'Exames de rotina',
   },
   {
-    id: 'laudo-bruno-2026-glicemia', paciente: 'pac-bruno', data: '2026-09-15T08:05:00-03:00', status: 'final', liberado: true,
-    titulo: 'Glicemia de jejum', codigo: { system: SISTEMA_LOINC, code: '2345-7', display: 'Glucose [Mass/volume] in Serum or Plasma' },
-    resultados: [{ exame: 'gli', loinc: '2345-7', nome: 'Glicose', valor: 102, unidade: 'mg/dL', ucum: 'mg/dL', baixo: 70, alto: 99 }],
+    codigo: {
+      code: '2276-4',
+      display: 'Ferritin [Mass/volume] in Serum or Plasma',
+      system: SISTEMA_LOINC,
+    },
+    data: '2026-11-10T07:30:00-03:00',
+    id: 'laudo-ana-2026-parcial',
+    liberado: false,
+    paciente: 'pac-ana',
+    resultados: [
+      {
+        alto: 150,
+        baixo: 15,
+        exame: 'fer',
+        loinc: '2276-4',
+        nome: 'Ferritina',
+        ucum: 'ng/mL',
+        unidade: 'ng/mL',
+        valor: 85,
+      },
+    ],
+    status: 'preliminary',
+    titulo: 'Ferritina (parcial)',
+  },
+  {
+    codigo: {
+      code: '2132-9',
+      display: 'Cobalamin (Vitamin B12) [Mass/volume] in Serum or Plasma',
+      system: SISTEMA_LOINC,
+    },
+    data: '2026-11-12T07:30:00-03:00',
+    id: 'laudo-ana-2026-retido',
+    liberado: false,
+    paciente: 'pac-ana',
+    resultados: [
+      {
+        alto: 900,
+        baixo: 200,
+        exame: 'b12',
+        loinc: '2132-9',
+        nome: 'Vitamina B12',
+        ucum: 'pg/mL',
+        unidade: 'pg/mL',
+        valor: 410,
+      },
+    ],
+    status: 'final',
+    titulo: 'Vitamina B12 (aguardando liberação)',
+  },
+  {
+    codigo: {
+      code: '2345-7',
+      display: 'Glucose [Mass/volume] in Serum or Plasma',
+      system: SISTEMA_LOINC,
+    },
+    data: '2026-09-15T08:05:00-03:00',
+    id: 'laudo-bruno-2026-glicemia',
+    liberado: true,
+    paciente: 'pac-bruno',
+    resultados: [
+      {
+        alto: 99,
+        baixo: 70,
+        exame: 'gli',
+        loinc: '2345-7',
+        nome: 'Glicose',
+        ucum: 'mg/dL',
+        unidade: 'mg/dL',
+        valor: 102,
+      },
+    ],
+    status: 'final',
+    titulo: 'Glicemia de jejum',
   },
 ];
 
 /** Data local (fuso de Brasília, UTC-3) com hora, em formato FHIR. */
-function local(ano: number, mes: number, dia: number, hora: number, minuto: number): { texto: string; ms: number } {
+function local(
+  ano: number,
+  mes: number,
+  dia: number,
+  hora: number,
+  minuto: number,
+): { texto: string; ms: number } {
   const p = (n: number) => String(n).padStart(2, '0');
   return {
-    texto: `${ano}-${p(mes)}-${p(dia)}T${p(hora)}:${p(minuto)}:00-03:00`,
     ms: Date.UTC(ano, mes - 1, dia, hora + 3, minuto),
+    texto: `${ano}-${p(mes)}-${p(dia)}T${p(hora)}:${p(minuto)}:00-03:00`,
   };
 }
 
@@ -246,7 +683,7 @@ export class DadosSinteticos {
   }
 
   gravar(recurso: Recurso, em: number, extra: Partial<Registro> = {}): Registro {
-    const registro: Registro = { recurso, versao: 1, atualizadoEm: em, ...extra };
+    const registro: Registro = { atualizadoEm: em, recurso, versao: 1, ...extra };
     this.tipo(recurso.resourceType).set(recurso.id, registro);
     return registro;
   }
@@ -264,29 +701,35 @@ export class DadosSinteticos {
 
   private activityDefinition(exame: Exame): Recurso {
     return {
-      resourceType: 'ActivityDefinition',
+      code: { coding: codingsDoExame(exame), text: exame.titulo },
       id: exame.id,
+      kind: 'ServiceRequest',
       meta: { profile: [perfil('br-lab-activity-definition')] },
-      url: `${BASE_CANONICA}/ActivityDefinition/${exame.id}`,
+      resourceType: 'ActivityDefinition',
       status: exame.status,
       title: exame.titulo,
-      kind: 'ServiceRequest',
-      code: { coding: codingsDoExame(exame), text: exame.titulo },
+      url: `${BASE_CANONICA}/ActivityDefinition/${exame.id}`,
     };
   }
 
-  private chargeItemDefinition(id: string, exame: Exame, valor: number, alcance: Record<string, unknown>, status: string): Recurso {
+  private chargeItemDefinition(
+    id: string,
+    exame: Exame,
+    valor: number,
+    alcance: Record<string, unknown>,
+    status: string,
+  ): Recurso {
     return {
-      resourceType: 'ChargeItemDefinition',
+      code: { coding: codingsDoExame(exame), text: exame.titulo },
       id,
       meta: { profile: [perfil('br-lab-charge-item-definition')] },
-      url: `${BASE_CANONICA}/ChargeItemDefinition/${id}`,
+      resourceType: 'ChargeItemDefinition',
       status,
-      code: { coding: codingsDoExame(exame), text: exame.titulo },
+      url: `${BASE_CANONICA}/ChargeItemDefinition/${id}`,
       ...alcance,
       propertyGroup: [
         {
-          priceComponent: [{ type: 'base', amount: { value: valor, currency: 'BRL' } }],
+          priceComponent: [{ amount: { currency: 'BRL', value: valor }, type: 'base' }],
         },
       ],
     };
@@ -301,9 +744,15 @@ export class DadosSinteticos {
       ] as const) {
         const valor = Math.round(exame.preco * fator * 100) / 100;
         this.gravar(
-          this.chargeItemDefinition(`${exame.id}-${ibge}`, exame, valor, {
-            jurisdiction: [{ coding: [{ system: SISTEMA_IBGE, code: ibge, display: cidade }] }],
-          }, status),
+          this.chargeItemDefinition(
+            `${exame.id}-${ibge}`,
+            exame,
+            valor,
+            {
+              jurisdiction: [{ coding: [{ code: ibge, display: cidade, system: SISTEMA_IBGE }] }],
+            },
+            status,
+          ),
           em,
         );
       }
@@ -312,14 +761,23 @@ export class DadosSinteticos {
     for (const id of ['glicose', 'hemograma']) {
       const exame = this.exame(id)!;
       this.gravar(
-        this.chargeItemDefinition(`${id}-unidade-centro`, exame, Math.round(exame.preco * 0.9 * 100) / 100, {
-          useContext: [
-            {
-              code: { system: 'http://terminology.hl7.org/CodeSystem/usage-context-type', code: 'venue' },
-              valueReference: { reference: 'Location/unidade-centro', type: 'Location' },
-            },
-          ],
-        }, 'active'),
+        this.chargeItemDefinition(
+          `${id}-unidade-centro`,
+          exame,
+          Math.round(exame.preco * 0.9 * 100) / 100,
+          {
+            useContext: [
+              {
+                code: {
+                  code: 'venue',
+                  system: 'http://terminology.hl7.org/CodeSystem/usage-context-type',
+                },
+                valueReference: { reference: 'Location/unidade-centro', type: 'Location' },
+              },
+            ],
+          },
+          'active',
+        ),
         em,
       );
     }
@@ -327,18 +785,27 @@ export class DadosSinteticos {
     for (const id of ['glicose', 'colesterol-total']) {
       const exame = this.exame(id)!;
       this.gravar(
-        this.chargeItemDefinition(`${id}-marca-regiao-sul`, exame, Math.round(exame.preco * 0.85 * 100) / 100, {
-          useContext: [
-            {
-              code: { system: SISTEMA_CONTEXTO_DE_PRECO, code: 'brand' },
-              valueReference: { ...ORGANIZACAO, type: 'Organization' },
-            },
-            {
-              code: { system: 'http://terminology.hl7.org/CodeSystem/usage-context-type', code: 'venue' },
-              valueReference: { reference: 'Location/regiao-sul', type: 'Location' },
-            },
-          ],
-        }, 'active'),
+        this.chargeItemDefinition(
+          `${id}-marca-regiao-sul`,
+          exame,
+          Math.round(exame.preco * 0.85 * 100) / 100,
+          {
+            useContext: [
+              {
+                code: { code: 'brand', system: SISTEMA_CONTEXTO_DE_PRECO },
+                valueReference: { ...ORGANIZACAO, type: 'Organization' },
+              },
+              {
+                code: {
+                  code: 'venue',
+                  system: 'http://terminology.hl7.org/CodeSystem/usage-context-type',
+                },
+                valueReference: { reference: 'Location/regiao-sul', type: 'Location' },
+              },
+            ],
+          },
+          'active',
+        ),
         em,
       );
     }
@@ -348,52 +815,86 @@ export class DadosSinteticos {
     // Região de preço: agrupa as unidades de Porto Alegre.
     this.gravar(
       {
-        resourceType: 'Location',
+        address: { city: 'Porto Alegre', country: 'BR', state: 'RS' },
         id: 'regiao-sul',
-        meta: { profile: [perfil('br-lab-location')] },
         identifier: [{ system: `${BASE_CANONICA}/regioes`, value: 'sul' }],
-        status: 'active',
-        name: 'Laboratório Exemplo, região de preço Sul',
-        mode: 'kind',
-        physicalType: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/location-physical-type', code: 'area', display: 'Area' }] },
-        address: { city: 'Porto Alegre', state: 'RS', country: 'BR' },
-        position: { latitude: -30.03, longitude: -51.2 },
         managingOrganization: ORGANIZACAO,
+        meta: { profile: [perfil('br-lab-location')] },
+        mode: 'kind',
+        name: 'Laboratório Exemplo, região de preço Sul',
+        physicalType: {
+          coding: [
+            {
+              code: 'area',
+              display: 'Area',
+              system: 'http://terminology.hl7.org/CodeSystem/location-physical-type',
+            },
+          ],
+        },
+        position: { latitude: -30.03, longitude: -51.2 },
+        resourceType: 'Location',
+        status: 'active',
       },
       em,
     );
     for (const u of UNIDADES) {
       this.gravar(
         {
-          resourceType: 'Location',
-          id: u.id,
-          meta: { profile: [perfil('br-lab-location')] },
-          identifier: [{ system: `${BASE_CANONICA}/unidades`, value: u.id.replace('unidade-', '') }],
-          status: 'active',
-          name: u.nome,
-          mode: 'instance',
-          physicalType: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/location-physical-type', code: 'bu', display: 'Building' }] },
-          address: { line: [u.linha], city: u.cidade, state: u.uf, postalCode: u.cep, country: 'BR' },
-          position: { latitude: u.latitude, longitude: u.longitude },
+          address: {
+            city: u.cidade,
+            country: 'BR',
+            line: [u.linha],
+            postalCode: u.cep,
+            state: u.uf,
+          },
           hoursOfOperation: [
-            { daysOfWeek: ['mon', 'tue', 'wed', 'thu', 'fri'], openingTime: '06:30:00', closingTime: '17:00:00' },
-            { daysOfWeek: ['sat'], openingTime: '07:00:00', closingTime: '12:00:00' },
+            {
+              closingTime: '17:00:00',
+              daysOfWeek: ['mon', 'tue', 'wed', 'thu', 'fri'],
+              openingTime: '06:30:00',
+            },
+            { closingTime: '12:00:00', daysOfWeek: ['sat'], openingTime: '07:00:00' },
+          ],
+          id: u.id,
+          identifier: [
+            { system: `${BASE_CANONICA}/unidades`, value: u.id.replace('unidade-', '') },
           ],
           managingOrganization: ORGANIZACAO,
+          meta: { profile: [perfil('br-lab-location')] },
+          mode: 'instance',
+          name: u.nome,
+          physicalType: {
+            coding: [
+              {
+                code: 'bu',
+                display: 'Building',
+                system: 'http://terminology.hl7.org/CodeSystem/location-physical-type',
+              },
+            ],
+          },
+          position: { latitude: u.latitude, longitude: u.longitude },
+          resourceType: 'Location',
+          status: 'active',
           ...(u.cidade === 'Porto Alegre' ? { partOf: { reference: 'Location/regiao-sul' } } : {}),
         },
         em,
       );
       this.gravar(
         {
-          resourceType: 'HealthcareService',
-          id: `coleta-${u.id.replace('unidade-', '')}`,
-          meta: { profile: [perfil('br-lab-healthcare-service')] },
           active: true,
+          availableTime: [
+            {
+              availableEndTime: '11:00:00',
+              availableStartTime: '06:30:00',
+              daysOfWeek: ['mon', 'tue', 'wed', 'thu', 'fri'],
+            },
+          ],
+          id: `coleta-${u.id.replace('unidade-', '')}`,
+          location: [{ reference: `Location/${u.id}` }],
+          meta: { profile: [perfil('br-lab-healthcare-service')] },
           name: 'Coleta de sangue e urina',
           providedBy: ORGANIZACAO,
-          location: [{ reference: `Location/${u.id}` }],
-          availableTime: [{ daysOfWeek: ['mon', 'tue', 'wed', 'thu', 'fri'], availableStartTime: '06:30:00', availableEndTime: '11:00:00' }],
+          resourceType: 'HealthcareService',
         },
         em,
       );
@@ -416,12 +917,19 @@ export class DadosSinteticos {
     const ref = new Date(agoraMs - 3 * 3600_000); // data local
     const dias: Array<{ ano: number; mes: number; dia: number }> = [];
     for (let d = 1; d <= 21; d++) {
-      const data = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate() + d));
+      const data = new Date(
+        Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate() + d),
+      );
       const dow = data.getUTCDay();
       if (dow === 0 || dow === 6) continue;
-      dias.push({ ano: data.getUTCFullYear(), mes: data.getUTCMonth() + 1, dia: data.getUTCDate() });
+      dias.push({
+        ano: data.getUTCFullYear(),
+        dia: data.getUTCDate(),
+        mes: data.getUTCMonth() + 1,
+      });
     }
-    const chave = (d: { ano: number; mes: number; dia: number }) => `${d.ano}${String(d.mes).padStart(2, '0')}${String(d.dia).padStart(2, '0')}`;
+    const chave = (d: { ano: number; mes: number; dia: number }) =>
+      `${d.ano}${String(d.mes).padStart(2, '0')}${String(d.dia).padStart(2, '0')}`;
     const novos = dias.filter((d) => !this.diasComHorarios.has(chave(d)));
     if (novos.length === 0) return;
     const primeiro = dias[0]!;
@@ -430,15 +938,18 @@ export class DadosSinteticos {
       const sufixo = u.id.replace('unidade-', '');
       const agendaId = `agenda-${sufixo}`;
       const agenda: Recurso = {
-        resourceType: 'Schedule',
-        id: agendaId,
-        meta: { profile: [perfil('br-lab-schedule')] },
         active: true,
         actor: [
-          { reference: `Location/${u.id}`, type: 'Location', display: u.nome },
+          { display: u.nome, reference: `Location/${u.id}`, type: 'Location' },
           { reference: `HealthcareService/coleta-${sufixo}`, type: 'HealthcareService' },
         ],
-        planningHorizon: { start: local(primeiro.ano, primeiro.mes, primeiro.dia, 0, 0).texto, end: local(ultimo.ano, ultimo.mes, ultimo.dia, 23, 59).texto },
+        id: agendaId,
+        meta: { profile: [perfil('br-lab-schedule')] },
+        planningHorizon: {
+          end: local(ultimo.ano, ultimo.mes, ultimo.dia, 23, 59).texto,
+          start: local(primeiro.ano, primeiro.mes, primeiro.dia, 0, 0).texto,
+        },
+        resourceType: 'Schedule',
       };
       const existente = this.tipo('Schedule').get(agendaId);
       if (existente) this.atualizar(existente, agenda, agoraMs);
@@ -449,20 +960,29 @@ export class DadosSinteticos {
           const h = Math.floor(minutos / 60);
           const m = minutos % 60;
           const inicio = local(dia.ano, dia.mes, dia.dia, h, m);
-          const fim = local(dia.ano, dia.mes, dia.dia, Math.floor((minutos + 15) / 60), (minutos + 15) % 60);
+          const fim = local(
+            dia.ano,
+            dia.mes,
+            dia.dia,
+            Math.floor((minutos + 15) / 60),
+            (minutos + 15) % 60,
+          );
           const hhmm = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
           const examesDoHorario = exames.filter((e) => !e.antesDas || hhmm < e.antesDas);
           this.contadorDeHorarios++;
           this.gravar(
             {
-              resourceType: 'Slot',
+              end: fim.texto,
               id: `${agendaId}-${chave(dia)}-${hhmm.replace(':', '')}`,
               meta: { profile: [perfil('br-lab-slot')] },
+              resourceType: 'Slot',
               schedule: { reference: `Schedule/${agendaId}` },
-              status: this.contadorDeHorarios % 7 === 0 ? 'busy' : 'free',
+              serviceType: examesDoHorario.map((e) => ({
+                coding: codingsDoExame(e),
+                text: e.titulo,
+              })),
               start: inicio.texto,
-              end: fim.texto,
-              serviceType: examesDoHorario.map((e) => ({ coding: codingsDoExame(e), text: e.titulo })),
+              status: this.contadorDeHorarios % 7 === 0 ? 'busy' : 'free',
             },
             agoraMs - 24 * 3600_000,
           );
@@ -477,13 +997,13 @@ export class DadosSinteticos {
     if (p.cpf) identifier.push({ system: SISTEMA_CPF, value: p.cpf });
     if (p.cns) identifier.push({ system: SISTEMA_CNS, value: p.cns });
     return {
-      resourceType: 'Patient',
-      id: p.id,
-      meta: { profile: [perfil('br-patient')] },
-      identifier,
-      name: [{ use: 'official', family: p.nome.family, given: p.nome.given }],
-      gender: p.sexo,
       birthDate: p.nascimento,
+      gender: p.sexo,
+      id: p.id,
+      identifier,
+      meta: { profile: [perfil('br-patient')] },
+      name: [{ family: p.nome.family, given: p.nome.given, use: 'official' }],
+      resourceType: 'Patient',
     };
   }
 
@@ -494,41 +1014,57 @@ export class DadosSinteticos {
         const obsId = `${l.id.replace('laudo-', 'obs-')}-${r.exame}`;
         resultados.push(obsId);
         const faixa: Record<string, unknown> = {};
-        if (r.baixo !== undefined) faixa.low = { value: r.baixo, unit: r.unidade, system: SISTEMA_UCUM, code: r.ucum };
-        if (r.alto !== undefined) faixa.high = { value: r.alto, unit: r.unidade, system: SISTEMA_UCUM, code: r.ucum };
+        if (r.baixo !== undefined)
+          faixa.low = { code: r.ucum, system: SISTEMA_UCUM, unit: r.unidade, value: r.baixo };
+        if (r.alto !== undefined)
+          faixa.high = { code: r.ucum, system: SISTEMA_UCUM, unit: r.unidade, value: r.alto };
         this.gravar(
           {
-            resourceType: 'Observation',
+            category: [
+              {
+                coding: [
+                  {
+                    code: 'laboratory',
+                    system: 'http://terminology.hl7.org/CodeSystem/observation-category',
+                  },
+                ],
+              },
+            ],
+            code: {
+              coding: [{ code: r.loinc, display: r.nome, system: SISTEMA_LOINC }],
+              text: r.nome,
+            },
+            effectiveDateTime: l.data,
             id: obsId,
             meta: { profile: [perfil('br-lab-observation')] },
-            status: l.status === 'preliminary' ? 'preliminary' : 'final',
-            category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
-            code: { coding: [{ system: SISTEMA_LOINC, code: r.loinc, display: r.nome }], text: r.nome },
-            subject: { reference: `Patient/${l.paciente}` },
-            effectiveDateTime: l.data,
-            valueQuantity: { value: r.valor, unit: r.unidade, system: SISTEMA_UCUM, code: r.ucum },
             referenceRange: [faixa],
+            resourceType: 'Observation',
+            status: l.status === 'preliminary' ? 'preliminary' : 'final',
+            subject: { reference: `Patient/${l.paciente}` },
+            valueQuantity: { code: r.ucum, system: SISTEMA_UCUM, unit: r.unidade, value: r.valor },
           },
           em,
-          { pacienteId: l.paciente, liberado: l.liberado },
+          { liberado: l.liberado, pacienteId: l.paciente },
         );
       }
       this.gravar(
         {
-          resourceType: 'DiagnosticReport',
-          id: l.id,
-          meta: { profile: [perfil('br-diagnostic-report')] },
-          status: l.status,
-          category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'LAB' }] }],
+          category: [
+            { coding: [{ code: 'LAB', system: 'http://terminology.hl7.org/CodeSystem/v2-0074' }] },
+          ],
           code: { coding: [l.codigo], text: l.titulo },
-          subject: { reference: `Patient/${l.paciente}` },
           effectiveDateTime: l.data,
+          id: l.id,
           issued: new Date(Date.parse(l.data) + 6 * 3600_000).toISOString(),
+          meta: { profile: [perfil('br-diagnostic-report')] },
           performer: [ORGANIZACAO],
+          resourceType: 'DiagnosticReport',
           result: resultados.map((id) => ({ reference: `Observation/${id}` })),
+          status: l.status,
+          subject: { reference: `Patient/${l.paciente}` },
         },
         em,
-        { pacienteId: l.paciente, liberado: l.liberado },
+        { liberado: l.liberado, pacienteId: l.paciente },
       );
     }
   }
@@ -539,29 +1075,29 @@ export class DadosSinteticos {
     if (!slot) return;
     this.gravar(
       {
-        resourceType: 'Appointment',
-        id: FIXTURAS.agendamentoDeOutroCanal,
-        meta: { profile: [perfil('br-lab-appointment')] },
-        status: 'booked',
-        start: slot.recurso.start,
-        end: slot.recurso.end,
-        slot: [{ reference: `Slot/${slot.recurso.id}` }],
+        basedOn: [{ reference: '#exame-1' }],
         contained: [
           {
-            resourceType: 'ServiceRequest',
-            id: 'exame-1',
-            meta: { profile: [perfil('br-lab-service-request')] },
-            status: 'active',
-            intent: 'order',
             code: { coding: codingsDoExame(this.exame('hemograma')!) },
+            id: 'exame-1',
+            intent: 'order',
+            meta: { profile: [perfil('br-lab-service-request')] },
+            resourceType: 'ServiceRequest',
+            status: 'active',
             subject: { reference: 'Patient/pac-ana', type: 'Patient' },
           },
         ],
-        basedOn: [{ reference: '#exame-1' }],
+        end: slot.recurso.end,
+        id: FIXTURAS.agendamentoDeOutroCanal,
+        meta: { profile: [perfil('br-lab-appointment')] },
         participant: [
           { actor: { reference: 'Patient/pac-ana', type: 'Patient' }, status: 'accepted' },
           { actor: { reference: 'Location/unidade-centro', type: 'Location' }, status: 'accepted' },
         ],
+        resourceType: 'Appointment',
+        slot: [{ reference: `Slot/${slot.recurso.id}` }],
+        start: slot.recurso.start,
+        status: 'booked',
       },
       em,
       { pacienteId: 'pac-ana' },
@@ -574,17 +1110,33 @@ export class DadosSinteticos {
     if (!unidade) return undefined;
     const precos = [...this.tipo('ChargeItemDefinition').values()]
       .map((r) => r.recurso)
-      .filter((c) => c.status === 'active' && (c.code as { coding: Array<{ system: string; code: string }> }).coding.some((x) => x.system === SISTEMA_PRODUTOS && x.code === exame.codigoProprio));
+      .filter(
+        (c) =>
+          c.status === 'active' &&
+          (c.code as { coding: Array<{ system: string; code: string }> }).coding.some(
+            (x) => x.system === SISTEMA_PRODUTOS && x.code === exame.codigoProprio,
+          ),
+      );
     const valor = (c: Recurso) =>
-      ((c.propertyGroup as Array<{ priceComponent: Array<{ amount: { value: number } }> }>)[0]!.priceComponent[0]!.amount.value);
-    const contexto = (c: Recurso) => (c.useContext as Array<{ valueReference?: { reference?: string } }> | undefined) ?? [];
-    const daUnidade = precos.find((c) => contexto(c).some((u) => u.valueReference?.reference === `Location/${unidadeId}`));
+      (c.propertyGroup as Array<{ priceComponent: Array<{ amount: { value: number } }> }>)[0]!
+        .priceComponent[0]!.amount.value;
+    const contexto = (c: Recurso) =>
+      (c.useContext as Array<{ valueReference?: { reference?: string } }> | undefined) ?? [];
+    const daUnidade = precos.find((c) =>
+      contexto(c).some((u) => u.valueReference?.reference === `Location/${unidadeId}`),
+    );
     if (daUnidade) return valor(daUnidade);
-    const regiao = (this.tipo('Location').get(unidadeId)?.recurso.partOf as { reference?: string } | undefined)?.reference;
-    const daRegiao = regiao ? precos.find((c) => contexto(c).some((u) => u.valueReference?.reference === regiao)) : undefined;
+    const regiao = (
+      this.tipo('Location').get(unidadeId)?.recurso.partOf as { reference?: string } | undefined
+    )?.reference;
+    const daRegiao = regiao
+      ? precos.find((c) => contexto(c).some((u) => u.valueReference?.reference === regiao))
+      : undefined;
     if (daRegiao) return valor(daRegiao);
     const doMunicipio = precos.find((c) =>
-      (c.jurisdiction as Array<{ coding: Array<{ code: string }> }> | undefined)?.some((j) => j.coding.some((x) => x.code === unidade.ibge)),
+      (c.jurisdiction as Array<{ coding: Array<{ code: string }> }> | undefined)?.some((j) =>
+        j.coding.some((x) => x.code === unidade.ibge),
+      ),
     );
     return doMunicipio ? valor(doMunicipio) : undefined;
   }

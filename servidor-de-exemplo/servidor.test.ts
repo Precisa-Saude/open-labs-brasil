@@ -3,6 +3,7 @@
 // (CNS-008, CNS-023) e aqui são conferidas no HTML.
 
 import { describe, expect, it } from 'vitest';
+
 import { cnsValido, cpfValido } from '../comum/cpf.ts';
 import type { Contexto } from '../suite-de-conformidade/contexto.ts';
 import { comServidorDeExemplo } from '../suite-de-conformidade/local.ts';
@@ -23,7 +24,8 @@ describe('dados sintéticos', () => {
 
   it('todo recurso servível declara o perfil e tem as cardinalidades mínimas', () => {
     const dados = new DadosSinteticos(Date.now());
-    const servivel = (r: Registro) => r.liberado !== false && !['preliminary'].includes(String(r.recurso.status));
+    const servivel = (r: Registro) =>
+      r.liberado !== false && !['preliminary'].includes(String(r.recurso.status));
     const problemas: string[] = [];
     let total = 0;
     for (const [, mapa] of dados.recursos) {
@@ -39,16 +41,21 @@ describe('dados sintéticos', () => {
 });
 
 interface Pagina {
-  status: number;
   html: string;
   location?: string;
+  status: number;
 }
 
 async function pedir(ctx: Contexto, url: string, form?: Record<string, string>): Promise<Pagina> {
   const r = await ctx.http.requisitar(url, {
     metodo: form ? 'POST' : 'GET',
     credencial: null,
-    ...(form ? { cabecalhos: { 'content-type': 'application/x-www-form-urlencoded' }, corpo: new URLSearchParams(form).toString() } : {}),
+    ...(form
+      ? {
+          cabecalhos: { 'content-type': 'application/x-www-form-urlencoded' },
+          corpo: new URLSearchParams(form).toString(),
+        }
+      : {}),
   });
   const location = r.cabecalhos.location;
   return { status: r.status, html: r.texto, ...(typeof location === 'string' ? { location } : {}) };
@@ -57,11 +64,14 @@ async function pedir(ctx: Contexto, url: string, form?: Record<string, string>):
 function formulario(html: string, base: string): { acao: string; campos: Record<string, string> } {
   const acao = /<form method="post" action="([^"]+)"/.exec(html)![1]!;
   const campos: Record<string, string> = {};
-  for (const m of html.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)) campos[m[1]!] = m[2]!;
+  for (const m of html.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g))
+    campos[m[1]!] = m[2]!;
   return { acao: new URL(acao, base).toString(), campos };
 }
 
-async function abrirJornada(ctx: Contexto): Promise<{ url: string; consentId: string; state: string }> {
+async function abrirJornada(
+  ctx: Contexto,
+): Promise<{ url: string; consentId: string; state: string }> {
   const c = ctx.cliente('principal');
   const consentId = await ctx.novoConsentimento(c);
   const { resposta, state } = await ctx.par(c, consentId);
@@ -87,7 +97,8 @@ describe('páginas do paciente', () => {
         'Válido até',
         'O laboratório vai confirmar ao aplicativo o CPF de quem está autorizando',
         'Página de teste',
-      ]) expect(tela.html).toContain(texto);
+      ])
+        expect(tela.html).toContain(texto);
       const f2 = formulario(tela.html, url);
       const fim = await pedir(ctx, f2.acao, { ...f2.campos, decisao: 'recusar' });
       expect(fim.status).toBe(303);
@@ -95,7 +106,9 @@ describe('páginas do paciente', () => {
       expect(retorno.searchParams.get('error')).toBe('access_denied');
       expect(retorno.searchParams.get('iss')).toBe(ctx.issuer);
       expect(retorno.searchParams.get('state')).toBe(state);
-      const c = (await ctx.lerConsentimento(ctx.cliente('principal'), consentId)).json as { status: string };
+      const c = (await ctx.lerConsentimento(ctx.cliente('principal'), consentId)).json as {
+        status: string;
+      };
       expect(c.status).toBe('REJECTED');
     });
   });
@@ -111,7 +124,10 @@ describe('páginas do paciente', () => {
       const semCpf = await pedir(ctx, f.acao, { ...f.campos, usuario: 'carla', senha: 'teste' });
       expect(semCpf.status).toBe(303);
       expect(new URL(semCpf.location!).searchParams.get('error')).toBe('access_denied');
-      const c = (await ctx.lerConsentimento(ctx.cliente('principal'), consentId)).json as { status: string; status_reason: { code: string } };
+      const c = (await ctx.lerConsentimento(ctx.cliente('principal'), consentId)).json as {
+        status: string;
+        status_reason: { code: string };
+      };
       expect(c.status_reason.code).toBe('PATIENT_WITHOUT_CPF');
     });
   });
@@ -127,9 +143,15 @@ describe('páginas do paciente', () => {
       expect(lista.html).toContain('Aplicativo de Teste A');
       expect(lista.html).toContain(a.consentId);
       const sessao = /name="sessao" value="([^"]+)"/.exec(lista.html)![1]!;
-      const depois = await pedir(ctx, new URL(`${new URL(uri).pathname}/revogar`, uri).toString(), { sessao, consent_id: a.consentId });
+      const depois = await pedir(ctx, new URL(`${new URL(uri).pathname}/revogar`, uri).toString(), {
+        sessao,
+        consent_id: a.consentId,
+      });
       expect(depois.html).not.toContain(a.consentId);
-      const lido = (await ctx.lerConsentimento(c, a.consentId)).json as { status: string; status_reason: { code: string; ended_via: string } };
+      const lido = (await ctx.lerConsentimento(c, a.consentId)).json as {
+        status: string;
+        status_reason: { code: string; ended_via: string };
+      };
       expect(lido.status).toBe('REVOKED');
       expect(lido.status_reason).toMatchObject({ code: 'PATIENT_REQUEST', ended_via: 'PROVIDER' });
     });

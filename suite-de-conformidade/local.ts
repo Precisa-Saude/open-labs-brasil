@@ -10,6 +10,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+
 import { ambienteValido, gerarAmbiente, opcoesDaLinhaDeComando } from '../ambiente-local/gerar.ts';
 import { lerConfiguracao } from '../servidor-de-exemplo/configuracao.ts';
 import { iniciarServidor } from '../servidor-de-exemplo/servidor.ts';
@@ -18,7 +19,12 @@ import { Contexto } from './contexto.ts';
 import { executarSuite, linhaDeProgresso, relatorioJson, resumoDaExecucao } from './executor.ts';
 import type { Resultado } from './resultado.ts';
 
-export const PASTA_DO_AMBIENTE = resolve(dirname(new URL(import.meta.url).pathname), '..', 'ambiente-local', 'gerado');
+export const PASTA_DO_AMBIENTE = resolve(
+  dirname(new URL(import.meta.url).pathname),
+  '..',
+  'ambiente-local',
+  'gerado',
+);
 
 export async function garantirAmbiente(pasta = PASTA_DO_AMBIENTE): Promise<void> {
   if (ambienteValido(pasta)) return;
@@ -26,12 +32,22 @@ export async function garantirAmbiente(pasta = PASTA_DO_AMBIENTE): Promise<void>
 }
 
 /** Sobe o servidor de exemplo e o contexto da suíte, executa `fn` e encerra os dois. */
-export async function comServidorDeExemplo<T>(fn: (ctx: Contexto) => Promise<T>, violacoes: string[] = []): Promise<T> {
+export async function comServidorDeExemplo<T>(
+  fn: (ctx: Contexto) => Promise<T>,
+  violacoes: string[] = [],
+): Promise<T> {
   await garantirAmbiente();
-  const servidor = await iniciarServidor(lerConfiguracao(join(PASTA_DO_AMBIENTE, 'servidor.config.json'), { violacoes, registrarEmLog: false }));
+  const servidor = await iniciarServidor(
+    lerConfiguracao(join(PASTA_DO_AMBIENTE, 'servidor.config.json'), {
+      registrarEmLog: false,
+      violacoes,
+    }),
+  );
   let ctx: Contexto | undefined;
   try {
-    ctx = await Contexto.criar(lerConfiguracaoDaSuite(join(PASTA_DO_AMBIENTE, 'suite.config.json')));
+    ctx = await Contexto.criar(
+      lerConfiguracaoDaSuite(join(PASTA_DO_AMBIENTE, 'suite.config.json')),
+    );
     return await fn(ctx);
   } finally {
     await ctx?.encerrar();
@@ -39,13 +55,19 @@ export async function comServidorDeExemplo<T>(fn: (ctx: Contexto) => Promise<T>,
   }
 }
 
-export async function executarContraServidorDeExemplo(o: {
-  violacoes?: string[];
-  somente?: string[];
-  aoTerminar?: (r: Resultado) => void;
-} = {}): Promise<Resultado[]> {
+export async function executarContraServidorDeExemplo(
+  o: {
+    violacoes?: string[];
+    somente?: string[];
+    aoTerminar?: (r: Resultado) => void;
+  } = {},
+): Promise<Resultado[]> {
   return comServidorDeExemplo(
-    (ctx) => executarSuite(ctx, { ...(o.somente ? { somente: o.somente } : {}), ...(o.aoTerminar ? { aoTerminar: o.aoTerminar } : {}) }),
+    (ctx) =>
+      executarSuite(ctx, {
+        ...(o.somente ? { somente: o.somente } : {}),
+        ...(o.aoTerminar ? { aoTerminar: o.aoTerminar } : {}),
+      }),
     o.violacoes ?? [],
   );
 }
@@ -53,9 +75,9 @@ export async function executarContraServidorDeExemplo(o: {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { values } = parseArgs({
     options: {
-      violacao: { type: 'string', multiple: true },
+      relatorio: { default: 'relatorios/conformidade-servidor-de-exemplo.json', type: 'string' },
       somente: { type: 'string' },
-      relatorio: { type: 'string', default: 'relatorios/conformidade-servidor-de-exemplo.json' },
+      violacao: { multiple: true, type: 'string' },
     },
   });
   console.log('Suíte de conformidade do Open Labs Brasil 0.2.2 contra o servidor de exemplo local');
@@ -70,7 +92,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`\nDuração: ${Math.round((Date.now() - inicio) / 1000)} s`);
   if (values.relatorio) {
     mkdirSync(dirname(values.relatorio), { recursive: true });
-    writeFileSync(values.relatorio, relatorioJson(resultados, { provedor: 'servidor de exemplo local', violacoes: values.violacao ?? [] }));
+    writeFileSync(
+      values.relatorio,
+      relatorioJson(resultados, {
+        provedor: 'servidor de exemplo local',
+        violacoes: values.violacao ?? [],
+      }),
+    );
     console.log(`Relatório em ${values.relatorio}`);
   }
   process.exit(resultados.some((r) => r.situacao === 'reprovado') ? 1 : 0);

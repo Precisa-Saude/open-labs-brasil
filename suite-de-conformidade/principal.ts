@@ -8,6 +8,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+
 import { lerConfiguracaoDaSuite } from './configuracao.ts';
 import { Contexto } from './contexto.ts';
 import { executarSuite, linhaDeProgresso, relatorioJson, resumoDaExecucao } from './executor.ts';
@@ -15,13 +16,15 @@ import { executarSuite, linhaDeProgresso, relatorioJson, resumoDaExecucao } from
 const { values } = parseArgs({
   options: {
     config: { type: 'string' },
-    somente: { type: 'string' },
     relatorio: { type: 'string' },
+    somente: { type: 'string' },
   },
 });
 
 if (!values.config) {
-  console.error('Uso: node suite-de-conformidade/principal.ts --config <arquivo> [--somente IDS] [--relatorio arquivo.json]');
+  console.error(
+    'Uso: node suite-de-conformidade/principal.ts --config <arquivo> [--somente IDS] [--relatorio arquivo.json]',
+  );
   process.exit(2);
 }
 
@@ -33,7 +36,9 @@ try {
   process.exit(2);
 }
 
-console.log(`Suíte de conformidade do Open Labs Brasil 0.2.2 contra ${ctx.provedor.display_name} (${ctx.issuer})`);
+console.log(
+  `Suíte de conformidade do Open Labs Brasil 0.2.2 contra ${ctx.provedor.display_name} (${ctx.issuer})`,
+);
 const resultados = await executarSuite(ctx, {
   ...(values.somente ? { somente: values.somente.split(',').map((s) => s.trim()) } : {}),
   aoTerminar: (r) => console.log(linhaDeProgresso(r)),

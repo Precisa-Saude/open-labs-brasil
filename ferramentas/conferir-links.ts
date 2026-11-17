@@ -38,7 +38,9 @@ function ancorasDe(arquivo: string): Set<string> {
 const problemas: string[] = [];
 let conferidos = 0;
 for (const arquivo of markdowns(RAIZ)) {
-  const texto = readFileSync(arquivo, 'utf8').replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
+  const texto = readFileSync(arquivo, 'utf8')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`\n]*`/g, '');
   for (const m of texto.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
     const alvo = m[1]!;
     if (/^(https?:|mailto:)/.test(alvo)) continue;
@@ -50,7 +52,11 @@ for (const arquivo of markdowns(RAIZ)) {
       problemas.push(`${origem}: ${alvo} não existe`);
       continue;
     }
-    if (fragmento && destino.endsWith('.md') && !ancorasDe(destino).has(decodeURIComponent(fragmento))) {
+    if (
+      fragmento &&
+      destino.endsWith('.md') &&
+      !ancorasDe(destino).has(decodeURIComponent(fragmento))
+    ) {
       problemas.push(`${origem}: âncora #${fragmento} não existe em ${relative(RAIZ, destino)}`);
     }
   }

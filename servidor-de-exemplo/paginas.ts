@@ -3,13 +3,13 @@
 // teste e dizem isso em destaque.
 
 import { cpfValido } from '../comum/cpf.ts';
-import { escaparHtml as e } from './http.ts';
 import { PACIENTES, SENHA_DE_TESTE } from './dados.ts';
+import { escaparHtml as e } from './http.ts';
 
 const TEXTO_DOS_ESCOPOS: Record<string, string> = {
   'appointment.write': 'Agendar, remarcar e cancelar exames em seu nome',
-  'results.read': 'Receber os resultados dos seus exames',
   'consent.read': 'Ver as autorizações que você deu a este aplicativo',
+  'results.read': 'Receber os resultados dos seus exames',
 };
 
 export function textoDoEscopo(escopo: string): string {
@@ -42,7 +42,8 @@ ${corpo}
 
 function listaDePacientesDeTeste(): string {
   const linhas = PACIENTES.map(
-    (p) => `<tr><td><code>${e(p.usuario)}</code></td><td>${e(`${p.nome.given.join(' ')} ${p.nome.family}`)}</td><td>${cpfValido(p.cpf) ? 'com CPF' : p.cpf ? '<strong>CPF inválido</strong>' : '<strong>sem CPF</strong>'}</td></tr>`,
+    (p) =>
+      `<tr><td><code>${e(p.usuario)}</code></td><td>${e(`${p.nome.given.join(' ')} ${p.nome.family}`)}</td><td>${cpfValido(p.cpf) ? 'com CPF' : p.cpf ? '<strong>CPF inválido</strong>' : '<strong>sem CPF</strong>'}</td></tr>`,
   ).join('');
   return `<details><summary>Pacientes sintéticos disponíveis (senha <code>${e(SENHA_DE_TESTE)}</code>)</summary>
 <table><thead><tr><th>Usuário</th><th>Nome</th><th>Cadastro</th></tr></thead><tbody>${linhas}</tbody></table></details>`;
@@ -77,7 +78,11 @@ export function telaDeConsentimento(dados: {
   nomeDoPaciente: string;
 }): string {
   const itens = dados.escopos.map((s) => `<li>${e(textoDoEscopo(s))}</li>`).join('');
-  const data = new Date(dados.expiracao).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'long', timeStyle: 'short' });
+  const data = new Date(dados.expiracao).toLocaleString('pt-BR', {
+    dateStyle: 'long',
+    timeStyle: 'short',
+    timeZone: 'America/Sao_Paulo',
+  });
   return pagina(
     'Autorizar aplicativo',
     `<h1>Autorizar o aplicativo ${e(dados.nomeDoReceptor)}</h1>
@@ -98,7 +103,10 @@ export function telaDeConsentimento(dados: {
 }
 
 export function paginaDeErro(mensagem: string): string {
-  return pagina('Não foi possível continuar', `<h1>Não foi possível continuar</h1><p>${e(mensagem)}</p><p>Volte ao aplicativo e tente de novo.</p>`);
+  return pagina(
+    'Não foi possível continuar',
+    `<h1>Não foi possível continuar</h1><p>${e(mensagem)}</p><p>Volte ao aplicativo e tente de novo.</p>`,
+  );
 }
 
 export function paginaDePagamento(acao: string, descricao: string, situacao: string): string {
@@ -111,14 +119,30 @@ ${situacao === 'aguardando pagamento' ? `<form method="post" action="${e(acao)}"
   );
 }
 
-export function paginaDeCompartilhamentos(acao: string, sessao: string, nome: string, linhas: Array<{ consentId: string; receptor: string; escopos: string[]; finalidade: string; expiracao: string }>): string {
+export function paginaDeCompartilhamentos(
+  acao: string,
+  sessao: string,
+  nome: string,
+  linhas: Array<{
+    consentId: string;
+    receptor: string;
+    escopos: string[];
+    finalidade: string;
+    expiracao: string;
+  }>,
+): string {
   const corpo = linhas.length
     ? `<table><thead><tr><th>Aplicativo</th><th>Acesso</th><th>Finalidade</th><th>Válido até</th><th></th></tr></thead><tbody>${linhas
         .map(
-          (l) => `<tr><td>${e(l.receptor)}</td><td>${l.escopos.map((s) => e(textoDoEscopo(s))).join('<br>')}</td><td>${e(l.finalidade)}</td><td>${e(l.expiracao)}</td>
+          (
+            l,
+          ) => `<tr><td>${e(l.receptor)}</td><td>${l.escopos.map((s) => e(textoDoEscopo(s))).join('<br>')}</td><td>${e(l.finalidade)}</td><td>${e(l.expiracao)}</td>
 <td><form method="post" action="${e(acao)}"><input type="hidden" name="sessao" value="${e(sessao)}"><input type="hidden" name="consent_id" value="${e(l.consentId)}"><button type="submit">Revogar</button></form></td></tr>`,
         )
         .join('')}</tbody></table>`
     : '<p>Nenhum aplicativo tem autorização ativa.</p>';
-  return pagina('Compartilhamentos', `<h1>Aplicativos autorizados</h1><p>Olá, ${e(nome)}. Revogar é gratuito e vale na hora.</p>${corpo}`);
+  return pagina(
+    'Compartilhamentos',
+    `<h1>Aplicativos autorizados</h1><p>Olá, ${e(nome)}. Revogar é gratuito e vale na hora.</p>${corpo}`,
+  );
 }

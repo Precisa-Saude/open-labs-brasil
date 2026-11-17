@@ -2,9 +2,9 @@
 // redirecionamento (seção 5.1) e guarda cada troca para as conferências
 // transversais (API-001, API-010, ERR-001, ERR-004).
 
+import type { OutgoingHttpHeaders } from 'node:http';
 import https from 'node:https';
 import tls from 'node:tls';
-import type { OutgoingHttpHeaders } from 'node:http';
 
 export interface CredencialTls {
   cert: Buffer;
@@ -12,33 +12,33 @@ export interface CredencialTls {
 }
 
 export interface OpcoesDaRequisicao {
-  metodo?: string;
   cabecalhos?: OutgoingHttpHeaders;
   corpo?: string | Buffer;
   /** Certificado de cliente. `null`: conexão sem certificado. */
   credencial?: CredencialTls | null;
-  tls?: { minVersion?: tls.SecureVersion; maxVersion?: tls.SecureVersion; ciphers?: string };
+  metodo?: string;
   /** Não guardar a troca no histórico. */
   semHistorico?: boolean;
+  tls?: { minVersion?: tls.SecureVersion; maxVersion?: tls.SecureVersion; ciphers?: string };
 }
 
 export interface Resposta {
-  status: number;
   cabecalhos: Record<string, string | string[] | undefined>;
-  texto: string;
   json: unknown;
-  url: string;
   metodo: string;
+  status: number;
+  texto: string;
+  url: string;
 }
 
 export interface Troca {
-  metodo: string;
-  url: string;
-  status: number;
-  cabecalhosDaRequisicao: OutgoingHttpHeaders;
   cabecalhos: Record<string, string | string[] | undefined>;
-  texto: string;
+  cabecalhosDaRequisicao: OutgoingHttpHeaders;
   json: unknown;
+  metodo: string;
+  status: number;
+  texto: string;
+  url: string;
 }
 
 export class ClienteHttp {
@@ -56,10 +56,10 @@ export class ClienteHttp {
       const req = https.request(
         url,
         {
-          method: metodo,
-          headers: cabecalhos,
-          ca: this.ca,
           agent: false,
+          ca: this.ca,
+          headers: cabecalhos,
+          method: metodo,
           timeout: 20_000,
           ...(o.credencial ? { cert: o.credencial.cert, key: o.credencial.key } : {}),
           ...(o.tls ?? {}),
@@ -75,7 +75,14 @@ export class ClienteHttp {
             } catch {
               json = undefined;
             }
-            resolver({ status: res.statusCode ?? 0, cabecalhos: res.headers, texto, json, url, metodo });
+            resolver({
+              cabecalhos: res.headers,
+              json,
+              metodo,
+              status: res.statusCode ?? 0,
+              texto,
+              url,
+            });
           });
           res.on('error', rejeitar);
         },
@@ -87,39 +94,55 @@ export class ClienteHttp {
     });
     if (!o.semHistorico) {
       this.historico.push({
-        metodo,
-        url,
-        status: resposta.status,
-        cabecalhosDaRequisicao: cabecalhos,
         cabecalhos: resposta.cabecalhos,
-        texto: resposta.texto,
+        cabecalhosDaRequisicao: cabecalhos,
         json: resposta.json,
+        metodo,
+        status: resposta.status,
+        texto: resposta.texto,
+        url,
       });
     }
     return resposta;
   }
 
   /** Tenta só o handshake TLS. Devolve a versão e a suíte negociadas, ou o erro. */
-  aperto(url: string, o: { credencial?: CredencialTls | null; minVersion?: tls.SecureVersion; maxVersion?: tls.SecureVersion; ciphers?: string }): Promise<{ ok: true; versao: string; suite: string } | { ok: false; erro: string }> {
+  aperto(
+    url: string,
+    o: {
+      credencial?: CredencialTls | null;
+      minVersion?: tls.SecureVersion;
+      maxVersion?: tls.SecureVersion;
+      ciphers?: string;
+    },
+  ): Promise<{ ok: true; versao: string; suite: string } | { ok: false; erro: string }> {
     const u = new URL(url);
     return new Promise((resolver) => {
       const socket = tls.connect({
+        ca: this.ca,
         host: u.hostname,
         port: Number(u.port || 443),
         servername: /^[0-9.]+$/.test(u.hostname) ? undefined : u.hostname,
-        ca: this.ca,
         ...(o.credencial ? { cert: o.credencial.cert, key: o.credencial.key } : {}),
         ...(o.minVersion ? { minVersion: o.minVersion } : {}),
         ...(o.maxVersion ? { maxVersion: o.maxVersion } : {}),
         ...(o.ciphers ? { ciphers: o.ciphers } : {}),
       });
-      const fim = (r: { ok: true; versao: string; suite: string } | { ok: false; erro: string }) => {
+      const fim = (
+        r: { ok: true; versao: string; suite: string } | { ok: false; erro: string },
+      ) => {
         socket.destroy();
         resolver(r);
       };
-      socket.setTimeout(5_000, () => fim({ ok: false, erro: 'tempo esgotado' }));
-      socket.once('secureConnect', () => fim({ ok: true, versao: socket.getProtocol() ?? '?', suite: socket.getCipher()?.name ?? '?' }));
-      socket.once('error', (e) => fim({ ok: false, erro: e.message }));
+      socket.setTimeout(5_000, () => fim({ erro: 'tempo esgotado', ok: false }));
+      socket.once('secureConnect', () =>
+        fim({
+          ok: true,
+          suite: socket.getCipher()?.name ?? '?',
+          versao: socket.getProtocol() ?? '?',
+        }),
+      );
+      socket.once('error', (e) => fim({ erro: e.message, ok: false }));
     });
   }
 }

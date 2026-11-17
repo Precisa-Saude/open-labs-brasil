@@ -7,6 +7,7 @@
 // separada por vírgula).
 
 import { parseArgs } from 'node:util';
+
 import { lerConfiguracao } from './configuracao.ts';
 import { iniciarServidor } from './servidor.ts';
 import { VIOLACOES } from './violacoes.ts';
@@ -14,18 +15,24 @@ import { VIOLACOES } from './violacoes.ts';
 const { values } = parseArgs({
   options: {
     config: { type: 'string' },
-    violacao: { type: 'string', multiple: true },
     'listar-violacoes': { type: 'boolean' },
+    violacao: { multiple: true, type: 'string' },
   },
 });
 
 if (values['listar-violacoes']) {
-  for (const [nome, v] of Object.entries(VIOLACOES)) console.log(`${nome.padEnd(44)} ${v.requisitos.join(', ').padEnd(18)} ${v.descricao}`);
+  for (const [nome, v] of Object.entries(VIOLACOES))
+    console.log(`${nome.padEnd(44)} ${v.requisitos.join(', ').padEnd(18)} ${v.descricao}`);
   process.exit(0);
 }
 
-const caminho = values.config ?? process.env.SERVIDOR_CONFIG ?? 'ambiente-local/gerado/servidor.config.json';
-const violacoes = values.violacao ?? (process.env.SERVIDOR_VIOLACOES ? process.env.SERVIDOR_VIOLACOES.split(',').filter(Boolean) : undefined);
+const caminho =
+  values.config ?? process.env.SERVIDOR_CONFIG ?? 'ambiente-local/gerado/servidor.config.json';
+const violacoes =
+  values.violacao ??
+  (process.env.SERVIDOR_VIOLACOES
+    ? process.env.SERVIDOR_VIOLACOES.split(',').filter(Boolean)
+    : undefined);
 const servidor = await iniciarServidor(lerConfiguracao(caminho, violacoes ? { violacoes } : {}));
 
 const encerrar = () => {

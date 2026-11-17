@@ -3,12 +3,14 @@
 // PS256 (seções 5.3.1 e 7.2).
 
 import { readFileSync } from 'node:fs';
-import https from 'node:https';
 import type { IncomingMessage } from 'node:http';
+import https from 'node:https';
 import type { TLSSocket } from 'node:tls';
 import { rootCertificates } from 'node:tls';
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify, type JWK } from 'jose';
-import { x5tS256, type Participante } from '../comum/registro.ts';
+
+import { decodeJwt, decodeProtectedHeader, importJWK, type JWK, jwtVerify } from 'jose';
+
+import { type Participante, x5tS256 } from '../comum/registro.ts';
 import { ErroOAuth } from './http.ts';
 import type { Provedor } from './provedor.ts';
 
@@ -24,8 +26,8 @@ export function x5tDaConexao(req: IncomingMessage): string | undefined {
 }
 
 interface JwksEmCache {
-  chaves: JWK[];
   buscadoEm: number;
+  chaves: JWK[];
 }
 
 const cacheDeJwks = new Map<string, JwksEmCache>();
@@ -55,7 +57,11 @@ async function baixarJwks(provedor: Provedor, uri: string): Promise<JWK[]> {
  * Chave do receptor pelo kid. Busca o conjunto de novo, no máximo uma vez por
  * minuto, quando o kid não está em cache (seção 7.6).
  */
-async function chaveDoReceptor(provedor: Provedor, receptor: Participante, kid: string): Promise<JWK | undefined> {
+async function chaveDoReceptor(
+  provedor: Provedor,
+  receptor: Participante,
+  kid: string,
+): Promise<JWK | undefined> {
   const uri = receptor.receiver!.jwks_uri;
   const agora = Date.now();
   let cache = cacheDeJwks.get(uri);
@@ -64,10 +70,12 @@ async function chaveDoReceptor(provedor: Provedor, receptor: Participante, kid: 
   let chave = cache?.chaves.find((k) => k.kid === kid);
   if (!chave && (!cache || agora - cache.buscadoEm >= 60_000)) {
     try {
-      cache = { chaves: await baixarJwks(provedor, uri), buscadoEm: agora };
+      cache = { buscadoEm: agora, chaves: await baixarJwks(provedor, uri) };
       cacheDeJwks.set(uri, cache);
     } catch (e) {
-      provedor.log(`jwks_uri de ${receptor.receiver!.client_id.slice(0, 8)} indisponível: ${(e as Error).message}`);
+      provedor.log(
+        `jwks_uri de ${receptor.receiver!.client_id.slice(0, 8)} indisponível: ${(e as Error).message}`,
+      );
       return undefined;
     }
     chave = cache.chaves.find((k) => k.kid === kid);
@@ -80,8 +88,8 @@ export function limparCacheDeJwks(): void {
 }
 
 export interface ClienteAutenticado {
-  receptor: Participante;
   clientId: string;
+  receptor: Participante;
   x5t: string;
 }
 
@@ -96,23 +104,28 @@ export async function autenticarCliente(
   form: Map<string, string[]>,
 ): Promise<ClienteAutenticado> {
   const x5tDaConexaoAtual = x5tDaConexao(req);
-  if (!x5tDaConexaoAtual && !provedor.violacao('aceita-sem-certificado')) throw invalido('certificado de cliente ausente');
+  if (!x5tDaConexaoAtual && !provedor.violacao('aceita-sem-certificado'))
+    throw invalido('certificado de cliente ausente');
   const x5t = x5tDaConexaoAtual ?? 'sem-certificado';
 
   const umValor = (nome: string) => {
     const v = form.get(nome);
-    if (v && v.length > 1) throw new ErroOAuth(400, 'invalid_request', `parâmetro repetido: ${nome}`);
+    if (v && v.length > 1)
+      throw new ErroOAuth(400, 'invalid_request', `parâmetro repetido: ${nome}`);
     return v?.[0];
   };
 
-  if (req.headers.authorization?.toLowerCase().startsWith('basic ')) throw invalido('método de autenticação não suportado');
+  if (req.headers.authorization?.toLowerCase().startsWith('basic '))
+    throw invalido('método de autenticação não suportado');
   const tipo = umValor('client_assertion_type');
   const assercao = umValor('client_assertion');
   if (!assercao && provedor.violacao('par-sem-autenticacao')) {
     const receptorSemAssercao = provedor.registro.receptor(umValor('client_id') ?? '');
-    if (receptorSemAssercao) return { receptor: receptorSemAssercao, clientId: receptorSemAssercao.participant_id, x5t };
+    if (receptorSemAssercao)
+      return { clientId: receptorSemAssercao.participant_id, receptor: receptorSemAssercao, x5t };
   }
-  if (tipo !== TIPO_DE_ASSERCAO || !assercao) throw invalido('autenticação do cliente ausente: use private_key_jwt');
+  if (tipo !== TIPO_DE_ASSERCAO || !assercao)
+    throw invalido('autenticação do cliente ausente: use private_key_jwt');
 
   let cabecalho: ReturnType<typeof decodeProtectedHeader>;
   let corpoNaoVerificado: ReturnType<typeof decodeJwt>;
@@ -123,27 +136,40 @@ export async function autenticarCliente(
     throw invalido('asserção malformada');
   }
   const algoritmos = provedor.violacao('aceita-rs256') ? ['PS256', 'RS256', 'ES256'] : ['PS256'];
-  if (typeof cabecalho.alg !== 'string' || !algoritmos.includes(cabecalho.alg)) throw invalido('algoritmo da asserção diferente de PS256');
+  if (typeof cabecalho.alg !== 'string' || !algoritmos.includes(cabecalho.alg))
+    throw invalido('algoritmo da asserção diferente de PS256');
   if (typeof cabecalho.kid !== 'string') throw invalido('asserção sem kid');
 
   const clientId = corpoNaoVerificado.iss;
   if (typeof clientId !== 'string') throw invalido('asserção sem iss');
   const clientIdDoFormulario = umValor('client_id');
-  if (clientIdDoFormulario !== undefined && clientIdDoFormulario !== clientId) throw invalido('client_id diferente do iss da asserção');
+  if (clientIdDoFormulario !== undefined && clientIdDoFormulario !== clientId)
+    throw invalido('client_id diferente do iss da asserção');
 
   const receptor = provedor.registro.receptor(clientId);
   if (!receptor) throw invalido('client_id desconhecido');
 
   // Certificado da conexão: do mesmo cliente, no registro e dentro da validade.
   const donoDoCertificado = provedor.registro.receptorDoCertificado(x5t);
-  if (!donoDoCertificado && !provedor.violacao('aceita-certificado-fora-do-registro') && !provedor.violacao('aceita-sem-certificado')) {
+  if (
+    !donoDoCertificado &&
+    !provedor.violacao('aceita-certificado-fora-do-registro') &&
+    !provedor.violacao('aceita-sem-certificado')
+  ) {
     throw invalido('certificado de cliente fora do registro');
   }
-  if (donoDoCertificado && donoDoCertificado.participant_id !== receptor.participant_id && !provedor.violacao('certificado-de-outro-cliente')) {
+  if (
+    donoDoCertificado &&
+    donoDoCertificado.participant_id !== receptor.participant_id &&
+    !provedor.violacao('certificado-de-outro-cliente')
+  ) {
     throw invalido('certificado registrado para outro cliente');
   }
 
-  if (!provedor.violacao('aceita-cliente-suspenso') && !provedor.registro.receptorAtendivel(receptor)) {
+  if (
+    !provedor.violacao('aceita-cliente-suspenso') &&
+    !provedor.registro.receptorAtendivel(receptor)
+  ) {
     throw invalido('receptor sem situação ativa ou sem versão de protocolo em comum');
   }
 
@@ -156,8 +182,8 @@ export async function autenticarCliente(
     const chave = await importJWK(jwk, cabecalho.alg);
     ({ payload: corpo } = await jwtVerify(assercao, chave, {
       algorithms: algoritmos,
-      currentDate: agora,
       clockTolerance: 10,
+      currentDate: agora,
     }));
   } catch {
     throw invalido('assinatura, exp ou nbf da asserção inválidos');
@@ -166,18 +192,21 @@ export async function autenticarCliente(
   const agoraS = Math.floor(agora.getTime() / 1000);
   if (corpo.sub !== clientId) throw invalido('sub da asserção diferente do client_id');
   const aud = corpo.aud;
-  const audValido = typeof aud === 'string'
-    ? aud === provedor.issuer
-    : provedor.violacao('aud-em-lista') && Array.isArray(aud) && aud.includes(provedor.issuer);
+  const audValido =
+    typeof aud === 'string'
+      ? aud === provedor.issuer
+      : provedor.violacao('aud-em-lista') && Array.isArray(aud) && aud.includes(provedor.issuer);
   if (!audValido) throw invalido('aud da asserção precisa ser o issuer, como texto simples');
   if (typeof corpo.iat !== 'number') throw invalido('asserção sem iat');
-  if (corpo.iat > agoraS + (provedor.violacao('iat-sem-tolerancia') ? 0 : 10)) throw invalido('iat da asserção no futuro');
+  if (corpo.iat > agoraS + (provedor.violacao('iat-sem-tolerancia') ? 0 : 10))
+    throw invalido('iat da asserção no futuro');
   if (typeof corpo.exp !== 'number') throw invalido('asserção sem exp');
   if (corpo.exp - corpo.iat > 60) throw invalido('validade da asserção maior que 60 segundos');
   if (typeof corpo.jti !== 'string' || corpo.jti.length === 0) throw invalido('asserção sem jti');
   const chaveDoJti = `${clientId} ${corpo.jti}`;
-  if (provedor.jtis.has(chaveDoJti) && !provedor.violacao('jti-repetido')) throw invalido('jti repetido');
+  if (provedor.jtis.has(chaveDoJti) && !provedor.violacao('jti-repetido'))
+    throw invalido('jti repetido');
   provedor.jtis.set(chaveDoJti, corpo.exp * 1000);
 
-  return { receptor, clientId, x5t };
+  return { clientId, receptor, x5t };
 }

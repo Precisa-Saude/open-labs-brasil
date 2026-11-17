@@ -9,8 +9,8 @@ import type { Relator } from '../resultado.ts';
 export type Fase = 'normal' | 'registro' | 'relogio' | 'final';
 
 export interface Teste {
+  executar: (ctx: Contexto, r: Relator) => Promise<void>;
+  fase?: Fase;
   id: string;
   titulo: string;
-  fase?: Fase;
-  executar: (ctx: Contexto, r: Relator) => Promise<void>;
 }
