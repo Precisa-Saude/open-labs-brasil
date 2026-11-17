@@ -8,95 +8,104 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import https from 'node:https';
+
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import {
   base64url,
   calculateJwkThumbprint,
-  compactVerify,
   CompactSign,
-  importJWK,
+  compactVerify,
   type CryptoKey,
+  importJWK,
   type JWK,
   type KeyObject,
 } from 'jose';
-import { Ajv2020 } from 'ajv/dist/2020.js';
 
-export const ESCOPOS_DE_PROVEDOR = ['catalog.read', 'locations.read', 'schedule.read', 'consent.manage'] as const;
+export const ESCOPOS_DE_PROVEDOR = [
+  'catalog.read',
+  'locations.read',
+  'schedule.read',
+  'consent.manage',
+] as const;
 export const ESCOPOS_DE_PACIENTE = ['appointment.write', 'results.read', 'consent.read'] as const;
 export const TODOS_OS_ESCOPOS = [...ESCOPOS_DE_PROVEDOR, ...ESCOPOS_DE_PACIENTE] as const;
 export type Escopo = (typeof TODOS_OS_ESCOPOS)[number];
 
 export interface ChaveDoRegistro {
-  kty: 'RSA';
-  kid: string;
-  use: 'sig';
   alg: 'PS256';
-  n: string;
   e: string;
+  kid: string;
+  kty: 'RSA';
+  n: string;
+  use: 'sig';
 }
 
 export interface CertificadoDeTransporte {
-  'x5t#S256': string;
-  x5c: string[];
-  not_before: string;
   not_after: string;
+  not_before: string;
+  x5c: string[];
+  'x5t#S256': string;
 }
 
 export interface BlocoProvedor {
-  issuer: string;
-  fhir_base_url: string;
   api_base_url: string;
-  scopes_supported: Escopo[];
   consent_management_uri: string;
+  fhir_base_url: string;
+  issuer: string;
   logo_uri?: string;
+  scopes_supported: Escopo[];
 }
 
 export interface BlocoReceptor {
   client_id: string;
   client_name: string;
-  redirect_uris: string[];
-  jwks_uri: string;
-  scopes_allowed: Escopo[];
-  transport_certificates: CertificadoDeTransporte[];
-  policy_uri: string;
-  tos_uri: string;
-  logo_uri?: string;
   eligibility: { patient_facing: true; health_plan_operator: false; declared_at: string };
+  jwks_uri: string;
+  logo_uri?: string;
+  policy_uri: string;
+  redirect_uris: string[];
+  scopes_allowed: Escopo[];
+  tos_uri: string;
+  transport_certificates: CertificadoDeTransporte[];
 }
 
 export type SituacaoDoParticipante = 'active' | 'suspended' | 'withdrawn';
 
 export interface Participante {
-  participant_id: string;
-  role: 'provider' | 'receiver';
-  status: SituacaoDoParticipante;
-  legal_name: string;
-  display_name: string;
   cnpj: string;
   contacts: { technical_email: string; security_email: string };
+  display_name: string;
+  legal_name: string;
+  participant_id: string;
   protocol_versions: string[];
-  updated_at: string;
   provider?: BlocoProvedor;
   receiver?: BlocoReceptor;
+  role: 'provider' | 'receiver';
+  status: SituacaoDoParticipante;
+  updated_at: string;
 }
 
 export interface DocumentoDoRegistro {
-  schema_version: string;
   environment: 'pilot' | 'production';
-  sequence: number;
-  issued_at: string;
   expires_at: string;
-  registry_keys: { keys: ChaveDoRegistro[] };
+  issued_at: string;
   participants: Participante[];
+  registry_keys: { keys: ChaveDoRegistro[] };
+  schema_version: string;
+  sequence: number;
 }
 
-export const CAMINHO_DO_SCHEMA = new URL('../especificacao/registro/participantes.schema.json', import.meta.url);
+export const CAMINHO_DO_SCHEMA = new URL(
+  '../especificacao/registro/participantes.schema.json',
+  import.meta.url,
+);
 
-let validadorDoSchema: ((dado: unknown) => boolean) & { errors?: unknown } | undefined;
+let validadorDoSchema: (((dado: unknown) => boolean) & { errors?: unknown }) | undefined;
 
 function validador() {
   if (!validadorDoSchema) {
     const schema = JSON.parse(readFileSync(CAMINHO_DO_SCHEMA, 'utf8')) as object;
-    const ajv = new Ajv2020({ strict: true, strictRequired: false, allErrors: false });
+    const ajv = new Ajv2020({ allErrors: false, strict: true, strictRequired: false });
     validadorDoSchema = ajv.compile(schema);
   }
   return validadorDoSchema;
@@ -108,35 +117,55 @@ export function erroDeSchema(documento: unknown): string | undefined {
   if (validar(documento)) return undefined;
   const erros = (validar.errors ?? []) as Array<{ instancePath?: string; message?: string }>;
   const primeiro = erros[0];
-  return primeiro ? `${primeiro.instancePath || '/'} ${primeiro.message ?? ''}`.trim() : 'documento inválido';
+  return primeiro
+    ? `${primeiro.instancePath || '/'} ${primeiro.message ?? ''}`.trim()
+    : 'documento inválido';
 }
 
 export type PassoDeVerificacao =
-  | 'V1' | 'V2' | 'V3' | 'V4' | 'V5' | 'V6' | 'V7' | 'V8' | 'V9' | 'V10' | 'V11' | 'V12' | 'V13' | 'V14';
+  | 'V1'
+  | 'V2'
+  | 'V3'
+  | 'V4'
+  | 'V5'
+  | 'V6'
+  | 'V7'
+  | 'V8'
+  | 'V9'
+  | 'V10'
+  | 'V11'
+  | 'V12'
+  | 'V13'
+  | 'V14';
 
 export interface DocumentoAceito {
-  documento: DocumentoDoRegistro;
   bytes: Uint8Array;
+  documento: DocumentoDoRegistro;
 }
 
 export interface EntradaDaVerificacao {
-  /** Bytes exatos de participantes.json, como baixados. */
-  bytes: Uint8Array;
-  /** Conteúdo de participantes.json.jws. */
-  jws: string;
-  /** registry_keys do documento N já aceito, ou o conjunto inicial. */
-  chavesConfiaveis: ChaveDoRegistro[];
+  agora: Date;
   /** Ambiente em que o participante opera. */
   ambiente: 'pilot' | 'production';
   /** Documento N já aceito, se houver. */
   atual?: DocumentoAceito;
-  agora: Date;
+  /** Bytes exatos de participantes.json, como baixados. */
+  bytes: Uint8Array;
+  /** registry_keys do documento N já aceito, ou o conjunto inicial. */
+  chavesConfiaveis: ChaveDoRegistro[];
+  /** Conteúdo de participantes.json.jws. */
+  jws: string;
   /** Só para o modo de violações do servidor de exemplo: passos que não são aplicados. */
   pular?: PassoDeVerificacao[];
 }
 
 export type ResultadoDaVerificacao =
-  | { aceito: true; documento: DocumentoDoRegistro; inalterado: boolean; passos: PassoDeVerificacao[] }
+  | {
+      aceito: true;
+      documento: DocumentoDoRegistro;
+      inalterado: boolean;
+      passos: PassoDeVerificacao[];
+    }
   | { aceito: false; passo: PassoDeVerificacao; motivo: string; passos: PassoDeVerificacao[] };
 
 const TOLERANCIA_DE_EMISSAO_MS = 60_000;
@@ -173,10 +202,17 @@ function decodificarCabecalho(parte: string): Record<string, unknown> | undefine
  * Aplica os passos V2 a V14 da seção 8.3 a um candidato. V1 é de quem baixa
  * (ver `baixarRegistro`). Devolve o primeiro passo que falhou.
  */
-export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise<ResultadoDaVerificacao> {
+export async function verificarCandidato(
+  entrada: EntradaDaVerificacao,
+): Promise<ResultadoDaVerificacao> {
   const passos: PassoDeVerificacao[] = [];
   const pular = new Set(entrada.pular ?? []);
-  const recusa = (passo: PassoDeVerificacao, motivo: string): ResultadoDaVerificacao => ({ aceito: false, passo, motivo, passos });
+  const recusa = (passo: PassoDeVerificacao, motivo: string): ResultadoDaVerificacao => ({
+    aceito: false,
+    motivo,
+    passo,
+    passos,
+  });
 
   // V2: três campos, o segundo vazio.
   const partes = entrada.jws.trim().split('.');
@@ -196,23 +232,34 @@ export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise
 
   // V4: kid entre as chaves confiáveis (do documento N, nunca do candidato).
   const kid = cabecalho.kid;
-  const chave = typeof kid === 'string' ? entrada.chavesConfiaveis.find((c) => c.kid === kid) : undefined;
+  const chave =
+    typeof kid === 'string' ? entrada.chavesConfiaveis.find((c) => c.kid === kid) : undefined;
   if (!chave) return recusa('V4', 'kid do cabeçalho não está nas chaves do documento atual');
   passos.push('V4');
 
   // V5: kid é o thumbprint da chave, e a chave é RSA de 2048 bits ou mais.
-  const thumbprint = await calculateJwkThumbprint({ kty: chave.kty, n: chave.n, e: chave.e }, 'sha256');
+  const thumbprint = await calculateJwkThumbprint(
+    { e: chave.e, kty: chave.kty, n: chave.n },
+    'sha256',
+  );
   if (thumbprint !== chave.kid) return recusa('V5', 'kid da chave não é o thumbprint dela');
-  if (chave.kty !== 'RSA' || tamanhoDoModuloEmBits(chave.n) < 2048) return recusa('V5', 'chave menor que 2048 bits');
+  if (chave.kty !== 'RSA' || tamanhoDoModuloEmBits(chave.n) < 2048)
+    return recusa('V5', 'chave menor que 2048 bits');
   passos.push('V5');
 
   // V6: assinatura PS256 sobre os bytes baixados.
   try {
-    const chavePublica = await importJWK({ kty: chave.kty, n: chave.n, e: chave.e }, 'PS256');
+    const chavePublica = await importJWK({ e: chave.e, kty: chave.kty, n: chave.n }, 'PS256');
     const jwsAnexado = `${cabecalhoB64}.${base64url.encode(entrada.bytes)}.${assinaturaB64}`;
     // Só no modo de violações (V3 pulado): a biblioteca também recusaria crit desconhecido, então ela é instruída a aceitá-lo.
-    const crit = pular.has('V3') && Array.isArray(cabecalho.crit) ? Object.fromEntries((cabecalho.crit as string[]).map((n) => [n, true])) : undefined;
-    await compactVerify(jwsAnexado, chavePublica, { algorithms: ['PS256'], ...(crit ? { crit } : {}) });
+    const crit =
+      pular.has('V3') && Array.isArray(cabecalho.crit)
+        ? Object.fromEntries((cabecalho.crit as string[]).map((n) => [n, true]))
+        : undefined;
+    await compactVerify(jwsAnexado, chavePublica, {
+      algorithms: ['PS256'],
+      ...(crit ? { crit } : {}),
+    });
   } catch {
     if (!pular.has('V6')) return recusa('V6', 'assinatura não verifica');
   }
@@ -221,7 +268,9 @@ export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise
   // V7: JSON válido contra o schema.
   let documento: DocumentoDoRegistro;
   try {
-    documento = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(entrada.bytes)) as DocumentoDoRegistro;
+    documento = JSON.parse(
+      new TextDecoder('utf-8', { fatal: true }).decode(entrada.bytes),
+    ) as DocumentoDoRegistro;
   } catch {
     return recusa('V7', 'os bytes não são JSON válido');
   }
@@ -230,14 +279,16 @@ export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise
   passos.push('V7');
 
   // V8: ambiente.
-  if (documento.environment !== entrada.ambiente && !pular.has('V8')) return recusa('V8', `registro do ambiente ${documento.environment}`);
+  if (documento.environment !== entrada.ambiente && !pular.has('V8'))
+    return recusa('V8', `registro do ambiente ${documento.environment}`);
   passos.push('V8');
 
   // V9: sequência maior que N. Igual: mesmos bytes seguem, bytes diferentes são recusados.
   let inalterado = false;
   if (entrada.atual) {
     const n = entrada.atual.documento.sequence;
-    if (documento.sequence < n && !pular.has('V9')) return recusa('V9', `sequence ${documento.sequence} menor que a atual ${n}`);
+    if (documento.sequence < n && !pular.has('V9'))
+      return recusa('V9', `sequence ${documento.sequence} menor que a atual ${n}`);
     if (documento.sequence === n) {
       if (!iguais(entrada.bytes, entrada.atual.bytes)) {
         return recusa('V9', `sequence ${n} repetida com bytes diferentes`);
@@ -267,7 +318,7 @@ export async function verificarCandidato(entrada: EntradaDaVerificacao): Promise
 
   // V13: kid de cada chave do candidato é o thumbprint dela.
   for (const k of documento.registry_keys.keys) {
-    const t = await calculateJwkThumbprint({ kty: k.kty, n: k.n, e: k.e }, 'sha256');
+    const t = await calculateJwkThumbprint({ e: k.e, kty: k.kty, n: k.n }, 'sha256');
     if (t !== k.kid) return recusa('V13', 'kid de uma chave do candidato não é o thumbprint dela');
   }
   passos.push('V13');
@@ -312,8 +363,8 @@ export async function assinarRegistro(
 /** Chave pública do registro em JWK, com kid igual ao thumbprint. */
 export async function chavePublicaDoRegistro(jwk: JWK): Promise<ChaveDoRegistro> {
   if (jwk.kty !== 'RSA' || !jwk.n || !jwk.e) throw new Error('A chave do registro precisa ser RSA');
-  const kid = await calculateJwkThumbprint({ kty: 'RSA', n: jwk.n, e: jwk.e }, 'sha256');
-  return { kty: 'RSA', kid, use: 'sig', alg: 'PS256', n: jwk.n, e: jwk.e };
+  const kid = await calculateJwkThumbprint({ e: jwk.e, kty: 'RSA', n: jwk.n }, 'sha256');
+  return { alg: 'PS256', e: jwk.e, kid, kty: 'RSA', n: jwk.n, use: 'sig' };
 }
 
 /**
@@ -330,17 +381,21 @@ export async function baixarRegistro(
   }
   const baixar = (url: string) =>
     new Promise<Buffer>((resolver, rejeitar) => {
-      const req = https.get(url, { ca: opcoes.ca, rejectUnauthorized: true, timeout: 10_000 }, (res) => {
-        if (res.statusCode !== 200) {
-          res.resume();
-          rejeitar(new Error(`status ${res.statusCode}`));
-          return;
-        }
-        const partes: Buffer[] = [];
-        res.on('data', (p: Buffer) => partes.push(p));
-        res.on('end', () => resolver(Buffer.concat(partes)));
-        res.on('error', rejeitar);
-      });
+      const req = https.get(
+        url,
+        { ca: opcoes.ca, rejectUnauthorized: true, timeout: 10_000 },
+        (res) => {
+          if (res.statusCode !== 200) {
+            res.resume();
+            rejeitar(new Error(`status ${res.statusCode}`));
+            return;
+          }
+          const partes: Buffer[] = [];
+          res.on('data', (p: Buffer) => partes.push(p));
+          res.on('end', () => resolver(Buffer.concat(partes)));
+          res.on('error', rejeitar);
+        },
+      );
       req.on('timeout', () => req.destroy(new Error('tempo esgotado')));
       req.on('error', rejeitar);
     });
@@ -360,7 +415,9 @@ export function versaoEfetiva(a: string[], b: string[]): string | undefined {
   };
   const va = a.map(analisar).filter((v) => v !== undefined);
   const vb = b.map(analisar).filter((v) => v !== undefined);
-  const majoresComuns = [...new Set(va.map((v) => v.major))].filter((m) => vb.some((v) => v.major === m));
+  const majoresComuns = [...new Set(va.map((v) => v.major))].filter((m) =>
+    vb.some((v) => v.major === m),
+  );
   if (majoresComuns.length === 0) return undefined;
   const major = Math.max(...majoresComuns);
   const minoresA = va.filter((v) => v.major === major).map((v) => v.minor);

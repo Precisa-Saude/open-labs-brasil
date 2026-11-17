@@ -15,25 +15,57 @@ export interface ParDeCertificado {
 }
 
 export interface ClienteConfigurado {
-  client_id: string;
-  chave_de_assinatura: string;
-  jwks_publico?: string;
   certificados: ParDeCertificado[];
+  chave_de_assinatura: string;
+  client_id: string;
+  jwks_publico?: string;
 }
 
 export interface PacienteDeTeste {
-  usuario: string;
-  senha?: string;
+  agendamento_de_outro_canal?: string;
   cpf?: string;
   fhir_id?: string;
-  laudos_nao_liberados?: string[];
   laudo_antigo?: { id: string; data: string };
   laudo_para_retificar?: string;
-  agendamento_de_outro_canal?: string;
+  laudos_nao_liberados?: string[];
+  senha?: string;
+  usuario: string;
 }
 
 export interface ConfiguracaoDaSuite {
+  agenda?: {
+    unidade?: string;
+    exame_comum?: string;
+    exame_restrito?: string;
+    exame_indisponivel?: { unidade: string; exame: string };
+    /** Prazo do provedor para o pagamento, em minutos. Sem ele, AGD-008 adianta o relógio em 24 horas. */
+    prazo_de_pagamento_minutos?: number;
+  };
   base: string;
+  catalogo?: { item_para_retirar?: string };
+  certificado_nao_registrado?: ParDeCertificado;
+  clientes: Partial<Record<PapelDoCliente, ClienteConfigurado>> & { principal: ClienteConfigurado };
+  controle_de_teste?: { url: string; token: string };
+  hospedagem?: { endereco_de_escuta: string; porta: number; certificado: string; chave: string };
+  /**
+   * Jornada do paciente pelas páginas reais do provedor, quando login e
+   * consentimento são formulários HTML simples (sem JavaScript). Tem
+   * precedência sobre a interface de controle para concluir a jornada.
+   */
+  jornada_por_formulario?: {
+    campo_usuario: string;
+    campo_senha: string;
+    campo_decisao: string;
+    valor_aprovar: string;
+    valor_recusar: string;
+  };
+  pacientes: {
+    principal: PacienteDeTeste;
+    outro?: PacienteDeTeste;
+    sem_cpf?: PacienteDeTeste;
+    cpf_invalido?: PacienteDeTeste;
+  };
+  provedor: { participant_id: string; ca_confiavel?: string };
   registro: {
     documento: string;
     assinatura: string;
@@ -44,27 +76,6 @@ export interface ConfiguracaoDaSuite {
     /** Caminho em que a hospedagem publica o registro que o provedor busca. */
     caminho_de_publicacao?: string;
   };
-  provedor: { participant_id: string; ca_confiavel?: string };
-  hospedagem?: { endereco_de_escuta: string; porta: number; certificado: string; chave: string };
-  clientes: Partial<Record<PapelDoCliente, ClienteConfigurado>> & { principal: ClienteConfigurado };
-  certificado_nao_registrado?: ParDeCertificado;
-  pacientes: { principal: PacienteDeTeste; outro?: PacienteDeTeste; sem_cpf?: PacienteDeTeste; cpf_invalido?: PacienteDeTeste };
-  agenda?: {
-    unidade?: string;
-    exame_comum?: string;
-    exame_restrito?: string;
-    exame_indisponivel?: { unidade: string; exame: string };
-    /** Prazo do provedor para o pagamento, em minutos. Sem ele, AGD-008 adianta o relógio em 24 horas. */
-    prazo_de_pagamento_minutos?: number;
-  };
-  catalogo?: { item_para_retirar?: string };
-  controle_de_teste?: { url: string; token: string };
-  /**
-   * Jornada do paciente pelas páginas reais do provedor, quando login e
-   * consentimento são formulários HTML simples (sem JavaScript). Tem
-   * precedência sobre a interface de controle para concluir a jornada.
-   */
-  jornada_por_formulario?: { campo_usuario: string; campo_senha: string; campo_decisao: string; valor_aprovar: string; valor_recusar: string };
 }
 
 export function lerConfiguracaoDaSuite(caminho: string): ConfiguracaoDaSuite {

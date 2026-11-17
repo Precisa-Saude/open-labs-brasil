@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { executarJornada } from '../receptor-minimo/jornada.ts';
 
 describe('jornada de ponta a ponta com o receptor mínimo', () => {

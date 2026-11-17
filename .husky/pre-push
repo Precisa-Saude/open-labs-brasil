@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+# Os mesmos portões do CI, para que um push que falharia lá seja pego aqui.
+# Repositório de pacote único: `pnpm verificar` roda lint, formatação, tipos,
+# testes, a suíte de conformidade contra o servidor de exemplo e os links.
+
+set -e
+
+echo "→ conferindo se o lockfile está em dia"
+pnpm install --frozen-lockfile --prefer-offline
+
+pnpm verificar
+
+echo "✓ pre-push aprovado"

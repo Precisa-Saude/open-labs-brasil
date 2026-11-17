@@ -7,12 +7,14 @@
 //   node suite-de-conformidade/receptor-minimo/jornada.ts
 
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import https from 'node:https';
 import { join } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
+
 import type { JWK } from 'jose';
-import { verificarCandidato, baixarRegistro, type ChaveDoRegistro } from '../../comum/registro.ts';
+
+import { baixarRegistro, type ChaveDoRegistro, verificarCandidato } from '../../comum/registro.ts';
 import { lerConfiguracao } from '../../servidor-de-exemplo/configuracao.ts';
 import { iniciarServidor } from '../../servidor-de-exemplo/servidor.ts';
 import { caminhoDe, lerConfiguracaoDaSuite } from '../configuracao.ts';
@@ -22,7 +24,8 @@ import { ReceptorMinimo, type Vinculo } from './receptor.ts';
 
 type Json = Record<string, unknown>;
 
-const real = (v: number | undefined) => (v === undefined ? 'sem preço' : `R$ ${v.toFixed(2).replace('.', ',')}`);
+const real = (v: number | undefined) =>
+  v === undefined ? 'sem preço' : `R$ ${v.toFixed(2).replace('.', ',')}`;
 
 /** Navegador mínimo: GET e POST de formulário, sem certificado de cliente, sem seguir redirecionamento. */
 class Navegador {
@@ -30,20 +33,38 @@ class Navegador {
   constructor(ca: string) {
     this.ca = ca;
   }
-  pedir(url: string, form?: Record<string, string>): Promise<{ status: number; html: string; location?: string }> {
+  pedir(
+    url: string,
+    form?: Record<string, string>,
+  ): Promise<{ status: number; html: string; location?: string }> {
     return new Promise((resolver, rejeitar) => {
       const corpo = form ? new URLSearchParams(form).toString() : undefined;
-      const req = https.request(url, {
-        method: form ? 'POST' : 'GET',
-        ca: this.ca,
-        agent: false,
-        headers: form ? { 'content-type': 'application/x-www-form-urlencoded', 'content-length': Buffer.byteLength(corpo!) } : {},
-      }, (res) => {
-        let html = '';
-        res.setEncoding('utf8');
-        res.on('data', (p: string) => (html += p));
-        res.on('end', () => resolver({ status: res.statusCode ?? 0, html, ...(res.headers.location ? { location: res.headers.location } : {}) }));
-      });
+      const req = https.request(
+        url,
+        {
+          agent: false,
+          ca: this.ca,
+          headers: form
+            ? {
+                'content-length': Buffer.byteLength(corpo!),
+                'content-type': 'application/x-www-form-urlencoded',
+              }
+            : {},
+          method: form ? 'POST' : 'GET',
+        },
+        (res) => {
+          let html = '';
+          res.setEncoding('utf8');
+          res.on('data', (p: string) => (html += p));
+          res.on('end', () =>
+            resolver({
+              html,
+              status: res.statusCode ?? 0,
+              ...(res.headers.location ? { location: res.headers.location } : {}),
+            }),
+          );
+        },
+      );
       req.on('error', rejeitar);
       if (corpo) req.write(corpo);
       req.end();
@@ -55,16 +76,23 @@ function formulario(html: string, base: string): { acao: string; campos: Record<
   const acao = /<form method="post" action="([^"]+)"/.exec(html)?.[1];
   if (!acao) throw new Error('página sem formulário');
   const campos: Record<string, string> = {};
-  for (const m of html.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)) campos[m[1]!] = m[2]!.replace(/&amp;/g, '&');
+  for (const m of html.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g))
+    campos[m[1]!] = m[2]!.replace(/&amp;/g, '&');
   return { acao: new URL(acao.replace(/&amp;/g, '&'), base).toString(), campos };
 }
 
 /** O paciente entra na página do laboratório e decide. Devolve o endereço de retorno ao aplicativo. */
-async function pacienteNoNavegador(nav: Navegador, url: string, usuario: string, decisao: 'aprovar' | 'recusar', conferirTela?: (html: string) => void): Promise<string> {
+async function pacienteNoNavegador(
+  nav: Navegador,
+  url: string,
+  usuario: string,
+  decisao: 'aprovar' | 'recusar',
+  conferirTela?: (html: string) => void,
+): Promise<string> {
   const login = await nav.pedir(url);
   if (login.status !== 200) throw new Error(`página de login respondeu ${login.status}`);
   const f1 = formulario(login.html, url);
-  const tela = await nav.pedir(f1.acao, { ...f1.campos, usuario, senha: 'teste' });
+  const tela = await nav.pedir(f1.acao, { ...f1.campos, senha: 'teste', usuario });
   if (tela.status !== 200) throw new Error(`login respondeu ${tela.status}`);
   conferirTela?.(tela.html);
   const f2 = formulario(tela.html, url);
@@ -74,19 +102,26 @@ async function pacienteNoNavegador(nav: Navegador, url: string, usuario: string,
 }
 
 export interface ResumoDaJornada {
-  passos: string[];
   agendamentoFinal: string;
-  revogacao: string;
-  tokenDepoisDaRevogacao: number;
   divergencia: string;
   estadoDaDivergencia: string;
+  passos: string[];
+  revogacao: string;
+  tokenDepoisDaRevogacao: number;
 }
 
-export async function executarJornada(imprimir: (linha: string) => void = () => {}): Promise<ResumoDaJornada> {
+export async function executarJornada(
+  imprimir: (linha: string) => void = () => {},
+): Promise<ResumoDaJornada> {
   await garantirAmbiente();
-  const servidor = await iniciarServidor(lerConfiguracao(join(PASTA_DO_AMBIENTE, 'servidor.config.json'), { registrarEmLog: false }));
+  const servidor = await iniciarServidor(
+    lerConfiguracao(join(PASTA_DO_AMBIENTE, 'servidor.config.json'), { registrarEmLog: false }),
+  );
   const cfg = lerConfiguracaoDaSuite(join(PASTA_DO_AMBIENTE, 'suite.config.json'));
-  const ca = [...rootCertificates, readFileSync(caminhoDe(cfg, cfg.provedor.ca_confiavel!), 'utf8')].join('\n');
+  const ca = [
+    ...rootCertificates,
+    readFileSync(caminhoDe(cfg, cfg.provedor.ca_confiavel!), 'utf8'),
+  ].join('\n');
   const passos: string[] = [];
   const passo = (t: string) => {
     passos.push(t);
@@ -101,27 +136,49 @@ export async function executarJornada(imprimir: (linha: string) => void = () => 
   hospedagem.publicar(cfg.registro.caminho_de_publicacao!, bytes);
   hospedagem.publicar(`${cfg.registro.caminho_de_publicacao!}.jws`, jws);
   try {
-    const doc = JSON.parse(bytes.toString('utf8')) as { participants: Array<{ receiver?: { client_id: string; jwks_uri: string } }> };
+    const doc = JSON.parse(bytes.toString('utf8')) as {
+      participants: Array<{ receiver?: { client_id: string; jwks_uri: string } }>;
+    };
     const eu = doc.participants.find((p) => p.receiver?.client_id === principal.client_id)!;
-    hospedagem.publicar(new URL(eu.receiver!.jwks_uri).pathname, readFileSync(caminhoDe(cfg, principal.jwks_publico!)));
-    await hospedagem.iniciar({ endereco: cfg.hospedagem!.endereco_de_escuta, porta: cfg.hospedagem!.porta, certificado: caminhoDe(cfg, cfg.hospedagem!.certificado), chave: caminhoDe(cfg, cfg.hospedagem!.chave) });
+    hospedagem.publicar(
+      new URL(eu.receiver!.jwks_uri).pathname,
+      readFileSync(caminhoDe(cfg, principal.jwks_publico!)),
+    );
+    await hospedagem.iniciar({
+      certificado: caminhoDe(cfg, cfg.hospedagem!.certificado),
+      chave: caminhoDe(cfg, cfg.hospedagem!.chave),
+      endereco: cfg.hospedagem!.endereco_de_escuta,
+      porta: cfg.hospedagem!.porta,
+    });
 
     // V1 a V14: o receptor baixa o registro por HTTPS e verifica com as chaves iniciais.
     const url = `https://localhost:${cfg.hospedagem!.porta}${cfg.registro.caminho_de_publicacao!}`;
     const baixado = await baixarRegistro(url, { ca });
     if ('erro' in baixado) throw new Error(baixado.erro);
-    const iniciais = JSON.parse(readFileSync(caminhoDe(cfg, cfg.registro.chaves_iniciais), 'utf8')) as { keys: ChaveDoRegistro[] };
-    const v = await verificarCandidato({ ...baixado, chavesConfiaveis: iniciais.keys, ambiente: 'pilot', agora: new Date() });
+    const iniciais = JSON.parse(
+      readFileSync(caminhoDe(cfg, cfg.registro.chaves_iniciais), 'utf8'),
+    ) as { keys: ChaveDoRegistro[] };
+    const v = await verificarCandidato({
+      ...baixado,
+      agora: new Date(),
+      ambiente: 'pilot',
+      chavesConfiaveis: iniciais.keys,
+    });
     if (!v.aceito) throw new Error(`registro recusado em ${v.passo}`);
     passo(`registro baixado por HTTPS e verificado (V1 a V14), sequence ${v.documento.sequence}`);
 
     const receptor = new ReceptorMinimo({
-      registro: v.documento,
-      participantIdDoProvedor: cfg.provedor.participant_id,
-      clientId: principal.client_id,
-      chaveDeAssinatura: JSON.parse(readFileSync(caminhoDe(cfg, principal.chave_de_assinatura), 'utf8')) as JWK,
-      certificado: { cert: readFileSync(caminhoDe(cfg, principal.certificados[0]!.certificado)), key: readFileSync(caminhoDe(cfg, principal.certificados[0]!.chave)) },
       ca,
+      certificado: {
+        cert: readFileSync(caminhoDe(cfg, principal.certificados[0]!.certificado)),
+        key: readFileSync(caminhoDe(cfg, principal.certificados[0]!.chave)),
+      },
+      chaveDeAssinatura: JSON.parse(
+        readFileSync(caminhoDe(cfg, principal.chave_de_assinatura), 'utf8'),
+      ) as JWK,
+      clientId: principal.client_id,
+      participantIdDoProvedor: cfg.provedor.participant_id,
+      registro: v.documento,
     });
     await receptor.descobrir();
     passo(`metadados de ${receptor.provedor.provider!.issuer} conferidos campo a campo`);
@@ -134,38 +191,63 @@ export async function executarJornada(imprimir: (linha: string) => void = () => 
     const hemograma = exames.find((e) => e.id === 'hemograma')!;
     const precoGlicose = receptor.precoNaUnidade(glicose, precos, centro, '4314902');
     const precoHemograma = receptor.precoNaUnidade(hemograma, precos, centro, '4314902');
-    passo(`catálogo com ${exames.length} exames e ${precos.length} preços; na unidade Centro, glicose ${real(precoGlicose)} e hemograma ${real(precoHemograma)}`);
+    passo(
+      `catálogo com ${exames.length} exames e ${precos.length} preços; na unidade Centro, glicose ${real(precoGlicose)} e hemograma ${real(precoHemograma)}`,
+    );
     const horarios = await receptor.horarios('Location/unidade-centro', [glicose, hemograma]);
     if (horarios.length === 0) throw new Error('sem horários livres');
-    passo(`${horarios.length} horários livres para glicose e hemograma na unidade Centro; primeiro: ${String(horarios[0]!.start)}`);
+    passo(
+      `${horarios.length} horários livres para glicose e hemograma na unidade Centro; primeiro: ${String(horarios[0]!.start)}`,
+    );
 
     // Conexão: o paciente autoriza na página do laboratório.
     const nav = new Navegador(ca);
     const ana = cfg.pacientes.principal;
     const jornada = await receptor.iniciarConexao(ana.cpf!);
-    const retorno = await pacienteNoNavegador(nav, jornada.urlDeAutorizacao, ana.usuario, 'aprovar', (html) => {
-      for (const esperado of ['Aplicativo de Teste A', 'Reunir seus resultados', 'confirmar ao aplicativo o CPF', 'Página de teste']) {
-        if (!html.includes(esperado)) throw new Error(`tela de consentimento sem "${esperado}"`);
-      }
-    });
+    const retorno = await pacienteNoNavegador(
+      nav,
+      jornada.urlDeAutorizacao,
+      ana.usuario,
+      'aprovar',
+      (html) => {
+        for (const esperado of [
+          'Aplicativo de Teste A',
+          'Reunir seus resultados',
+          'confirmar ao aplicativo o CPF',
+          'Página de teste',
+        ]) {
+          if (!html.includes(esperado)) throw new Error(`tela de consentimento sem "${esperado}"`);
+        }
+      },
+    );
     const conexao = await receptor.concluirConexao(retorno);
     if (!conexao.ok) throw new Error(`conexão falhou: ${conexao.motivo} ${conexao.detalhe}`);
     const vinculo: Vinculo = conexao.vinculo;
-    passo('paciente entrou na página do laboratório, aprovou; código trocado e CPF do titular conferido');
+    passo(
+      'paciente entrou na página do laboratório, aprovou; código trocado e CPF do titular conferido',
+    );
 
     const laudos = await receptor.resultados(vinculo);
     passo(`${laudos.length} laudos liberados lidos com o token de paciente`);
 
     // Agendar, pagar e cancelar.
-    const agendamento = await receptor.agendar(vinculo, { slot: horarios[0]!, exames: [glicose, hemograma], unidade: 'Location/unidade-centro' });
+    const agendamento = await receptor.agendar(vinculo, {
+      exames: [glicose, hemograma],
+      slot: horarios[0]!,
+      unidade: 'Location/unidade-centro',
+    });
     const link = receptor.linkDePagamento(agendamento);
-    if (agendamento.status !== 'pending' || !link) throw new Error(`agendamento sem pagamento pendente: ${String(agendamento.status)}`);
-    passo(`agendado Appointment/${String(agendamento.id)} (pending), link de pagamento https no domínio do laboratório`);
+    if (agendamento.status !== 'pending' || !link)
+      throw new Error(`agendamento sem pagamento pendente: ${String(agendamento.status)}`);
+    passo(
+      `agendado Appointment/${String(agendamento.id)} (pending), link de pagamento https no domínio do laboratório`,
+    );
     const pagina = await nav.pedir(link);
     const pagamento = formulario(pagina.html, link);
     await nav.pedir(pagamento.acao, { ...pagamento.campos, acao: 'pagar' });
     const pago = await receptor.lerAgendamento(vinculo, String(agendamento.id));
-    if (pago.recurso.status !== 'booked') throw new Error(`depois do pagamento: ${String(pago.recurso.status)}`);
+    if (pago.recurso.status !== 'booked')
+      throw new Error(`depois do pagamento: ${String(pago.recurso.status)}`);
     passo('pagamento na página do laboratório; agendamento passou a booked');
     const cancelado = await receptor.cancelar(vinculo, String(agendamento.id));
     if (cancelado.status !== 'cancelled') throw new Error('cancelamento sem cancelled');
@@ -175,17 +257,29 @@ export async function executarJornada(imprimir: (linha: string) => void = () => 
     const tokenAntigo = vinculo.accessToken!;
     const revogacao = await receptor.revogar(vinculo);
     const depois = await new Promise<number>((resolver, rejeitar) => {
-      const req = https.request(`${receptor.fhirBase}/Patient/${vinculo.pacienteFhirId}`, {
-        ca, agent: false, cert: readFileSync(caminhoDe(cfg, principal.certificados[0]!.certificado)), key: readFileSync(caminhoDe(cfg, principal.certificados[0]!.chave)),
-        headers: { authorization: `Bearer ${tokenAntigo}`, accept: 'application/fhir+json', 'x-fapi-interaction-id': randomUUID() },
-      }, (res) => {
-        res.resume();
-        resolver(res.statusCode ?? 0);
-      });
+      const req = https.request(
+        `${receptor.fhirBase}/Patient/${vinculo.pacienteFhirId}`,
+        {
+          agent: false,
+          ca,
+          cert: readFileSync(caminhoDe(cfg, principal.certificados[0]!.certificado)),
+          headers: {
+            accept: 'application/fhir+json',
+            authorization: `Bearer ${tokenAntigo}`,
+            'x-fapi-interaction-id': randomUUID(),
+          },
+          key: readFileSync(caminhoDe(cfg, principal.certificados[0]!.chave)),
+        },
+        (res) => {
+          res.resume();
+          resolver(res.statusCode ?? 0);
+        },
+      );
       req.on('error', rejeitar);
       req.end();
     });
-    if (revogacao !== 'revogado' || depois !== 401) throw new Error(`revogação ${revogacao}, token antigo respondeu ${depois}`);
+    if (revogacao !== 'revogado' || depois !== 401)
+      throw new Error(`revogação ${revogacao}, token antigo respondeu ${depois}`);
     passo('consentimento revogado (204); o token antigo passou a receber 401');
 
     // Segunda jornada: o aplicativo acha que é o Bruno, mas quem entra no laboratório é a Ana.
@@ -193,31 +287,44 @@ export async function executarJornada(imprimir: (linha: string) => void = () => 
     const j2 = await receptor.iniciarConexao(bruno.cpf!);
     const r2 = await pacienteNoNavegador(nav, j2.urlDeAutorizacao, ana.usuario, 'aprovar');
     const divergente = await receptor.concluirConexao(r2);
-    if (divergente.ok || divergente.motivo !== 'PATIENT_MISMATCH') throw new Error('CPF divergente não foi detectado');
+    if (divergente.ok || divergente.motivo !== 'PATIENT_MISMATCH')
+      throw new Error('CPF divergente não foi detectado');
     const tokenDeConsulta = await receptor.tokenDeProvedor('consent.manage');
     const estado = await new Promise<Json>((resolver, rejeitar) => {
-      const req = https.request(`${receptor.apiBase}/consents/${j2.consentId}`, {
-        ca, agent: false, cert: readFileSync(caminhoDe(cfg, principal.certificados[0]!.certificado)), key: readFileSync(caminhoDe(cfg, principal.certificados[0]!.chave)),
-        headers: { authorization: `Bearer ${tokenDeConsulta}`, accept: 'application/json', 'x-fapi-interaction-id': randomUUID() },
-      }, (res) => {
-        let t = '';
-        res.on('data', (p: Buffer) => (t += p.toString()));
-        res.on('end', () => resolver(JSON.parse(t) as Json));
-      });
+      const req = https.request(
+        `${receptor.apiBase}/consents/${j2.consentId}`,
+        {
+          agent: false,
+          ca,
+          cert: readFileSync(caminhoDe(cfg, principal.certificados[0]!.certificado)),
+          headers: {
+            accept: 'application/json',
+            authorization: `Bearer ${tokenDeConsulta}`,
+            'x-fapi-interaction-id': randomUUID(),
+          },
+          key: readFileSync(caminhoDe(cfg, principal.certificados[0]!.chave)),
+        },
+        (res) => {
+          let t = '';
+          res.on('data', (p: Buffer) => (t += p.toString()));
+          res.on('end', () => resolver(JSON.parse(t) as Json));
+        },
+      );
       req.on('error', rejeitar);
       req.end();
     });
     const motivo = (estado.status_reason as { code?: string } | undefined)?.code;
-    if (estado.status !== 'REVOKED' || motivo !== 'PATIENT_MISMATCH') throw new Error(`estado depois da divergência: ${String(estado.status)} ${String(motivo)}`);
+    if (estado.status !== 'REVOKED' || motivo !== 'PATIENT_MISMATCH')
+      throw new Error(`estado depois da divergência: ${String(estado.status)} ${String(motivo)}`);
     passo('CPF divergente: o receptor revogou com PATIENT_MISMATCH sem chamar a API FHIR');
 
     return {
-      passos,
       agendamentoFinal: String(cancelado.status),
-      revogacao,
-      tokenDepoisDaRevogacao: depois,
       divergencia: divergente.motivo,
       estadoDaDivergencia: `${String(estado.status)} ${String(motivo)}`,
+      passos,
+      revogacao,
+      tokenDepoisDaRevogacao: depois,
     };
   } finally {
     await hospedagem.fechar();

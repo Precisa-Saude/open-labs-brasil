@@ -17,22 +17,37 @@ export class Hospedagem {
   private servidor: https.Server | undefined;
 
   publicar(caminho: string, conteudo: Buffer | string, tipo = 'application/json'): void {
-    this.arquivos.set(caminho, { tipo, conteudo: Buffer.isBuffer(conteudo) ? conteudo : Buffer.from(conteudo) });
+    this.arquivos.set(caminho, {
+      conteudo: Buffer.isBuffer(conteudo) ? conteudo : Buffer.from(conteudo),
+      tipo,
+    });
   }
 
-  async iniciar(o: { endereco: string; porta: number; certificado: string; chave: string }): Promise<void> {
-    this.servidor = https.createServer({ cert: readFileSync(o.certificado), key: readFileSync(o.chave), minVersion: 'TLSv1.2' }, (req, res) => {
-      const caminho = new URL(req.url ?? '/', 'https://hospedagem').pathname;
-      this.recebidas.push({ caminho, em: Date.now() });
-      const arquivo = this.arquivos.get(caminho);
-      if (req.method !== 'GET' || !arquivo) {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': arquivo.tipo, 'Content-Length': arquivo.conteudo.length, 'Cache-Control': 'no-store' });
-      res.end(arquivo.conteudo);
-    });
+  async iniciar(o: {
+    endereco: string;
+    porta: number;
+    certificado: string;
+    chave: string;
+  }): Promise<void> {
+    this.servidor = https.createServer(
+      { cert: readFileSync(o.certificado), key: readFileSync(o.chave), minVersion: 'TLSv1.2' },
+      (req, res) => {
+        const caminho = new URL(req.url ?? '/', 'https://hospedagem').pathname;
+        this.recebidas.push({ caminho, em: Date.now() });
+        const arquivo = this.arquivos.get(caminho);
+        if (req.method !== 'GET' || !arquivo) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        res.writeHead(200, {
+          'Cache-Control': 'no-store',
+          'Content-Length': arquivo.conteudo.length,
+          'Content-Type': arquivo.tipo,
+        });
+        res.end(arquivo.conteudo);
+      },
+    );
     await new Promise<void>((resolver, rejeitar) => {
       this.servidor!.once('error', rejeitar);
       this.servidor!.listen(o.porta, o.endereco, () => resolver());

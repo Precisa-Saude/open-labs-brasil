@@ -3,14 +3,21 @@
 
 import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
+
 import { eViolacao, type Violacao } from './violacoes.ts';
 
 export interface ConfiguracaoDoServidor {
+  controle: { habilitado: boolean; token: string; enderecoDeEscuta: string };
+  enderecoDeEscuta: string;
+  /** Limite de chamadas por token de acesso por minuto. 0 desliga. */
+  limitePorMinuto: number;
   /** participant_id do provedor no registro. Os endereços vêm do registro. */
   participantId: string;
-  enderecoDeEscuta: string;
   portas: { publica: number; mtls: number; controle: number };
-  tls: { certificado: string; chave: string; caConfiavel: string };
+  /** Tempo em que o horário fica reservado à espera do pagamento. */
+  prazoDePagamentoMinutos: number;
+  /** Mensagens de diagnóstico no console. */
+  registrarEmLog: boolean;
   registro: {
     arquivo: string;
     assinatura: string;
@@ -20,21 +27,17 @@ export interface ConfiguracaoDoServidor {
     ambiente: 'pilot' | 'production';
     intervaloMinutos: number;
   };
-  controle: { habilitado: boolean; token: string; enderecoDeEscuta: string };
-  /** Tempo em que o horário fica reservado à espera do pagamento. */
-  prazoDePagamentoMinutos: number;
-  /** Limite de chamadas por token de acesso por minuto. 0 desliga. */
-  limitePorMinuto: number;
+  tls: { certificado: string; chave: string; caConfiavel: string };
   violacoes: Set<Violacao>;
-  /** Mensagens de diagnóstico no console. */
-  registrarEmLog: boolean;
 }
 
 interface ArquivoDeConfiguracao {
-  participant_id: string;
+  controle?: { habilitado?: boolean; token?: string; endereco_de_escuta?: string };
   endereco_de_escuta?: string;
+  limite_por_minuto?: number;
+  participant_id: string;
   portas?: { publica?: number; mtls?: number; controle?: number };
-  tls: { certificado: string; chave: string; ca_confiavel: string };
+  prazo_de_pagamento_minutos?: number;
   registro: {
     arquivo: string;
     assinatura: string;
@@ -43,13 +46,14 @@ interface ArquivoDeConfiguracao {
     ambiente?: 'pilot' | 'production';
     intervalo_minutos?: number;
   };
-  controle?: { habilitado?: boolean; token?: string; endereco_de_escuta?: string };
-  prazo_de_pagamento_minutos?: number;
-  limite_por_minuto?: number;
+  tls: { certificado: string; chave: string; ca_confiavel: string };
   violacoes?: string[];
 }
 
-export function lerConfiguracao(caminho: string, sobreposicao: { violacoes?: string[]; registrarEmLog?: boolean } = {}): ConfiguracaoDoServidor {
+export function lerConfiguracao(
+  caminho: string,
+  sobreposicao: { violacoes?: string[]; registrarEmLog?: boolean } = {},
+): ConfiguracaoDoServidor {
   const base = dirname(resolve(caminho));
   const bruto = JSON.parse(readFileSync(caminho, 'utf8')) as ArquivoDeConfiguracao;
   const r = (p: string) => (isAbsolute(p) ? p : resolve(base, p));
@@ -59,14 +63,21 @@ export function lerConfiguracao(caminho: string, sobreposicao: { violacoes?: str
     violacoes.add(v);
   }
   return {
-    participantId: bruto.participant_id,
-    enderecoDeEscuta: bruto.endereco_de_escuta ?? '127.0.0.1',
-    portas: {
-      publica: bruto.portas?.publica ?? 8443,
-      mtls: bruto.portas?.mtls ?? 8444,
-      controle: bruto.portas?.controle ?? 8445,
+    controle: {
+      enderecoDeEscuta: bruto.controle?.endereco_de_escuta ?? '127.0.0.1',
+      habilitado: bruto.controle?.habilitado ?? false,
+      token: bruto.controle?.token ?? '',
     },
-    tls: { certificado: r(bruto.tls.certificado), chave: r(bruto.tls.chave), caConfiavel: r(bruto.tls.ca_confiavel) },
+    enderecoDeEscuta: bruto.endereco_de_escuta ?? '127.0.0.1',
+    limitePorMinuto: bruto.limite_por_minuto ?? 120,
+    participantId: bruto.participant_id,
+    portas: {
+      controle: bruto.portas?.controle ?? 8445,
+      mtls: bruto.portas?.mtls ?? 8444,
+      publica: bruto.portas?.publica ?? 8443,
+    },
+    prazoDePagamentoMinutos: bruto.prazo_de_pagamento_minutos ?? 15,
+    registrarEmLog: sobreposicao.registrarEmLog ?? true,
     registro: {
       arquivo: r(bruto.registro.arquivo),
       assinatura: r(bruto.registro.assinatura),
@@ -75,15 +86,12 @@ export function lerConfiguracao(caminho: string, sobreposicao: { violacoes?: str
       ambiente: bruto.registro.ambiente ?? 'pilot',
       intervaloMinutos: bruto.registro.intervalo_minutos ?? 30,
     },
-    controle: {
-      habilitado: bruto.controle?.habilitado ?? false,
-      token: bruto.controle?.token ?? '',
-      enderecoDeEscuta: bruto.controle?.endereco_de_escuta ?? '127.0.0.1',
+    tls: {
+      caConfiavel: r(bruto.tls.ca_confiavel),
+      certificado: r(bruto.tls.certificado),
+      chave: r(bruto.tls.chave),
     },
-    prazoDePagamentoMinutos: bruto.prazo_de_pagamento_minutos ?? 15,
-    limitePorMinuto: bruto.limite_por_minuto ?? 120,
     violacoes,
-    registrarEmLog: sobreposicao.registrarEmLog ?? true,
   };
 }
 

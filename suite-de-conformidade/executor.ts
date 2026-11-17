@@ -3,13 +3,20 @@
 import type { Contexto } from './contexto.ts';
 import { emOrdemDeExecucao, emOrdemDoCapitulo, TODOS_OS_TESTES } from './requisitos/index.ts';
 import type { Teste } from './requisitos/tipos.ts';
-import { NaoVerificavel, Relator, Reprovacao, ROTULO, type Resultado, type Situacao } from './resultado.ts';
+import {
+  NaoVerificavel,
+  Relator,
+  Reprovacao,
+  type Resultado,
+  ROTULO,
+  type Situacao,
+} from './resultado.ts';
 
 export interface OpcoesDaExecucao {
-  /** Identificadores a executar. Vazio: todos. */
-  somente?: string[];
   /** Chamado ao fim de cada teste. */
   aoTerminar?: (r: Resultado) => void;
+  /** Identificadores a executar. Vazio: todos. */
+  somente?: string[];
 }
 
 export async function executarTeste(ctx: Contexto, t: Teste): Promise<Resultado> {
@@ -35,12 +42,21 @@ export async function executarTeste(ctx: Contexto, t: Teste): Promise<Resultado>
       motivo = `erro durante o teste: ${(e as Error).message}`;
     }
   }
-  return { id: t.id, titulo: t.titulo, situacao, motivo, evidencias: r.evidencias, duracaoMs: Date.now() - inicio };
+  return {
+    duracaoMs: Date.now() - inicio,
+    evidencias: r.evidencias,
+    id: t.id,
+    motivo,
+    situacao,
+    titulo: t.titulo,
+  };
 }
 
 export async function executarSuite(ctx: Contexto, o: OpcoesDaExecucao = {}): Promise<Resultado[]> {
   const somente = new Set(o.somente ?? []);
-  const testes = emOrdemDeExecucao(TODOS_OS_TESTES).filter((t) => somente.size === 0 || somente.has(t.id));
+  const testes = emOrdemDeExecucao(TODOS_OS_TESTES).filter(
+    (t) => somente.size === 0 || somente.has(t.id),
+  );
   const resultados: Resultado[] = [];
   for (const t of testes) {
     const r = await executarTeste(ctx, t);
@@ -51,7 +67,7 @@ export async function executarSuite(ctx: Contexto, o: OpcoesDaExecucao = {}): Pr
 }
 
 export function linhaDeProgresso(r: Resultado): string {
-  const marca = { aprovado: 'ok  ', reprovado: 'FALHA', nao_verificavel: 'n/v ' }[r.situacao];
+  const marca = { aprovado: 'ok  ', nao_verificavel: 'n/v ', reprovado: 'FALHA' }[r.situacao];
   const detalhe = r.situacao === 'aprovado' ? '' : `\n         ${r.motivo}`;
   return `  ${marca} ${r.id.padEnd(8)} ${r.titulo} (${r.duracaoMs} ms)${detalhe}`;
 }
@@ -66,18 +82,38 @@ export function resumoDaExecucao(resultados: Resultado[]): string {
     `  ${ROTULO.nao_verificavel}: ${conta('nao_verificavel')}`,
   ];
   const reprovados = resultados.filter((r) => r.situacao === 'reprovado');
-  if (reprovados.length) linhas.push('', 'Reprovados:', ...reprovados.map((r) => `  ${r.id}: ${r.motivo}`));
+  if (reprovados.length)
+    linhas.push('', 'Reprovados:', ...reprovados.map((r) => `  ${r.id}: ${r.motivo}`));
   const nv = resultados.filter((r) => r.situacao === 'nao_verificavel');
-  if (nv.length) linhas.push('', 'Não verificáveis automaticamente:', ...nv.map((r) => `  ${r.id}: ${r.motivo}`));
+  if (nv.length)
+    linhas.push(
+      '',
+      'Não verificáveis automaticamente:',
+      ...nv.map((r) => `  ${r.id}: ${r.motivo}`),
+    );
   return linhas.join('\n');
 }
 
-export function relatorioJson(resultados: Resultado[], extra: Record<string, unknown> = {}): string {
-  return JSON.stringify({
-    especificacao: '0.2.2',
-    protocolo: '0.2',
-    gerado_em: new Date().toISOString(),
-    ...extra,
-    resultados: resultados.map((r) => ({ id: r.id, titulo: r.titulo, situacao: ROTULO[r.situacao], motivo: r.motivo, evidencias: r.evidencias, duracao_ms: r.duracaoMs })),
-  }, null, 2);
+export function relatorioJson(
+  resultados: Resultado[],
+  extra: Record<string, unknown> = {},
+): string {
+  return JSON.stringify(
+    {
+      especificacao: '0.2.2',
+      gerado_em: new Date().toISOString(),
+      protocolo: '0.2',
+      ...extra,
+      resultados: resultados.map((r) => ({
+        duracao_ms: r.duracaoMs,
+        evidencias: r.evidencias,
+        id: r.id,
+        motivo: r.motivo,
+        situacao: ROTULO[r.situacao],
+        titulo: r.titulo,
+      })),
+    },
+    null,
+    2,
+  );
 }

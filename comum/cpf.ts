@@ -35,7 +35,8 @@ export function cnsValido(cns: string): boolean {
 
 /** Gera um CNS provisório válido a partir de uma base de 14 dígitos começando com 7, 8 ou 9, ajustando o último dígito. */
 export function completarCnsProvisorio(base14: string): string {
-  if (!/^[789][0-9]{13}$/.test(base14)) throw new Error('A base do CNS provisório precisa de 14 dígitos começando com 7, 8 ou 9');
+  if (!/^[789][0-9]{13}$/.test(base14))
+    throw new Error('A base do CNS provisório precisa de 14 dígitos começando com 7, 8 ou 9');
   for (let d = 0; d <= 9; d++) {
     const candidato = base14 + String(d);
     if (cnsValido(candidato)) return candidato;

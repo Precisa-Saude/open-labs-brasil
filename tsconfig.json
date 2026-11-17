@@ -16,5 +16,12 @@
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["comum", "servidor-de-exemplo", "suite-de-conformidade", "ambiente-local", "ferramentas", "vitest.config.ts"]
+  "include": [
+    "comum",
+    "servidor-de-exemplo",
+    "suite-de-conformidade",
+    "ambiente-local",
+    "ferramentas",
+    "vitest.config.ts"
+  ]
 }

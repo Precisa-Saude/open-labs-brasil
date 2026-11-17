@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidade de segurança
+    url: 'https://github.com/Precisa-Saude/open-labs-brasil/security/advisories/new'
+    about: Reporte em privado, pelos canais do SECURITY.md, nunca em issue pública

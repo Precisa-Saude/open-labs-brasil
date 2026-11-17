@@ -6,10 +6,10 @@ Vale para a especificação, para o servidor de exemplo, para a suíte de confor
 
 **Não abra issue pública.** Use um dos dois canais privados:
 
-| Canal | Endereço |
-| --- | --- |
+| Canal                                       | Endereço                                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Relato privado de vulnerabilidade do GitHub | [Novo relato](https://github.com/Precisa-Saude/open-labs-brasil/security/advisories/new) |
-| E-mail | security@precisa-saude.com.br |
+| E-mail                                      | security@precisa-saude.com.br                                                            |
 
 Ajuda incluir:
 

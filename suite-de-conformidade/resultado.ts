@@ -4,17 +4,17 @@ export type Situacao = 'aprovado' | 'reprovado' | 'nao_verificavel';
 
 export const ROTULO: Record<Situacao, string> = {
   aprovado: 'aprovado',
-  reprovado: 'reprovado',
   nao_verificavel: 'não verificável automaticamente',
+  reprovado: 'reprovado',
 };
 
 export interface Resultado {
-  id: string;
-  titulo: string;
-  situacao: Situacao;
-  motivo: string;
-  evidencias: string[];
   duracaoMs: number;
+  evidencias: string[];
+  id: string;
+  motivo: string;
+  situacao: Situacao;
+  titulo: string;
 }
 
 /** O provedor descumpriu o requisito. */

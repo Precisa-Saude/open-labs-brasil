@@ -36,7 +36,9 @@ Outros comandos:
 | `pnpm suite --config <arquivo>` | Roda a suíte contra o provedor da configuração. `--somente AUT-001,CNS-002` filtra, `--relatorio arquivo.json` grava o resultado |
 | `pnpm typecheck` | Confere os tipos com o TypeScript em modo estrito |
 | `pnpm docs:links` | Confere que todo link relativo dos arquivos Markdown resolve |
-| `pnpm verificar` | Os quatro acima em sequência: tipos, testes, suíte local e links. É o que a CI roda em todo PR e em todo push no ramo principal (`.github/workflows/ci.yml`), no Node 22.18 e no 24 |
+| `pnpm lint`, `pnpm format:check` | ESLint e Prettier, com as configurações compartilhadas da Precisa Saúde (`eslint.config.js`, `.prettierrc`) |
+| `pnpm conferir` | Suíte local e links |
+| `pnpm verificar` | Tudo acima em sequência: lint, formatação, tipos, testes, suíte local e links. A CI roda as mesmas partes em todo PR e em todo push no ramo principal, no Node 22.18, pelo fluxo de verificações compartilhado (`.github/workflows/ci.yml`) |
 
 ## Ambiente local
 
@@ -238,8 +240,11 @@ O receptor mínimo não depende do pacote cliente do fhir-brasil. Ele segue as r
 | --- | --- | --- |
 | `jose` | Produção | JWT, JWS e JWK: asserção do cliente, verificação da assinatura do registro, thumbprints. A seção 7.11 pede biblioteca JOSE estabelecida |
 | `ajv` | Produção | Passo V7 da seção 8.3: validar o registro contra o JSON Schema 2020-12 da especificação. Escrever um validador de JSON Schema à mão seria a fonte de erro que a seção 7.11 desaconselha para JOSE |
-| `typescript` | Desenvolvimento | Conferência de tipos (`pnpm typecheck`). O Node executa o TypeScript direto, sem compilação |
+| `typescript` | Desenvolvimento | Conferência de tipos (`pnpm typecheck`). O Node executa o TypeScript direto, sem compilação. Fica na 6.0 porque o typescript-eslint ainda não aceita a 7 |
 | `vitest` | Desenvolvimento | Testes |
 | `@types/node` | Desenvolvimento | Tipos do Node 22 |
+| `eslint`, `prettier`, `prettier-plugin-packagejson` e as configurações `@precisa-saude/eslint-config` e `@precisa-saude/prettier-config` | Desenvolvimento | Lint e formatação compartilhados com os outros repositórios da Precisa Saúde |
+| `@commitlint/cli`, `@precisa-saude/commitlint-config`, `husky`, `lint-staged` | Desenvolvimento | Mensagens de commit no padrão Conventional Commits e ganchos de pre-commit, commit-msg e pre-push |
+| `@precisa-saude/agent-instructions` | Desenvolvimento | Regras compartilhadas para agentes de código, importadas pelo `CLAUDE.md` |
 
 Os certificados de teste usam o `openssl` do sistema, chamado pelo gerador, sem dependência. O servidor HTTP é o `node:https`, sem framework.

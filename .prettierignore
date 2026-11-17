@@ -1,0 +1,19 @@
+node_modules
+dist
+build
+coverage
+.turbo
+pnpm-lock.yaml
+CHANGELOG.md
+
+# Gerados localmente, fora do controle de versão.
+ambiente-local/gerado
+relatorios
+
+# Texto da especificação e documentos com regra própria de alteração
+# (GOVERNANCE.md). Reformatar tabelas aqui viraria diferença em texto
+# normativo. O exemplo de registro é assinado sobre os bytes exatos do
+# arquivo: reformatá-lo invalidaria a assinatura.
+especificacao
+docs
+GOVERNANCE.md

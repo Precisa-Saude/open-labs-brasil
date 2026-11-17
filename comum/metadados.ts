@@ -2,27 +2,55 @@
 // tabela de valores obrigatórios da seção 5.2. Usada pela suíte (AUT-026) e
 // pelo receptor mínimo (RCP-031).
 
-export function divergenciasDosMetadados(m: Record<string, unknown>, issuerDoRegistro: string, escoposDoRegistro: string[]): string[] {
+export function divergenciasDosMetadados(
+  m: Record<string, unknown>,
+  issuerDoRegistro: string,
+  escoposDoRegistro: string[],
+): string[] {
   const erros: string[] = [];
   const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const https = (v: unknown) => typeof v === 'string' && v.startsWith('https://');
-  if (m.issuer !== issuerDoRegistro) erros.push(`issuer ${String(m.issuer)} diferente do registro (${issuerDoRegistro})`);
-  for (const k of ['authorization_endpoint', 'token_endpoint', 'pushed_authorization_request_endpoint', 'jwks_uri']) {
+  if (m.issuer !== issuerDoRegistro)
+    erros.push(`issuer ${String(m.issuer)} diferente do registro (${issuerDoRegistro})`);
+  for (const k of [
+    'authorization_endpoint',
+    'token_endpoint',
+    'pushed_authorization_request_endpoint',
+    'jwks_uri',
+  ]) {
     if (!https(m[k])) erros.push(`${k} ausente ou sem https`);
   }
-  for (const k of ['require_pushed_authorization_requests', 'authorization_response_iss_parameter_supported', 'tls_client_certificate_bound_access_tokens']) {
+  for (const k of [
+    'require_pushed_authorization_requests',
+    'authorization_response_iss_parameter_supported',
+    'tls_client_certificate_bound_access_tokens',
+  ]) {
     if (m[k] !== true) erros.push(`${k} precisa ser true (veio ${JSON.stringify(m[k])})`);
   }
-  if (!igual(m.response_types_supported, ['code'])) erros.push('response_types_supported precisa ser exatamente ["code"]');
+  if (!igual(m.response_types_supported, ['code']))
+    erros.push('response_types_supported precisa ser exatamente ["code"]');
   const grants = m.grant_types_supported;
-  if (!Array.isArray(grants) || !['authorization_code', 'refresh_token', 'client_credentials'].every((g) => grants.includes(g)) || grants.includes('password') || grants.includes('implicit')) {
-    erros.push('grant_types_supported precisa conter authorization_code, refresh_token e client_credentials, sem password nem implicit');
+  if (
+    !Array.isArray(grants) ||
+    !['authorization_code', 'refresh_token', 'client_credentials'].every((g) =>
+      grants.includes(g),
+    ) ||
+    grants.includes('password') ||
+    grants.includes('implicit')
+  ) {
+    erros.push(
+      'grant_types_supported precisa conter authorization_code, refresh_token e client_credentials, sem password nem implicit',
+    );
   }
-  if (!igual(m.token_endpoint_auth_methods_supported, ['private_key_jwt'])) erros.push('token_endpoint_auth_methods_supported precisa ser exatamente ["private_key_jwt"]');
-  if (!igual(m.token_endpoint_auth_signing_alg_values_supported, ['PS256'])) erros.push('token_endpoint_auth_signing_alg_values_supported precisa ser exatamente ["PS256"]');
-  if (!igual(m.code_challenge_methods_supported, ['S256'])) erros.push('code_challenge_methods_supported precisa ser exatamente ["S256"]');
+  if (!igual(m.token_endpoint_auth_methods_supported, ['private_key_jwt']))
+    erros.push('token_endpoint_auth_methods_supported precisa ser exatamente ["private_key_jwt"]');
+  if (!igual(m.token_endpoint_auth_signing_alg_values_supported, ['PS256']))
+    erros.push('token_endpoint_auth_signing_alg_values_supported precisa ser exatamente ["PS256"]');
+  if (!igual(m.code_challenge_methods_supported, ['S256']))
+    erros.push('code_challenge_methods_supported precisa ser exatamente ["S256"]');
   const escopos = m.scopes_supported;
-  if (!Array.isArray(escopos) || !escoposDoRegistro.every((s) => escopos.includes(s))) erros.push('scopes_supported não contém todos os escopos do provedor no registro');
+  if (!Array.isArray(escopos) || !escoposDoRegistro.every((s) => escopos.includes(s)))
+    erros.push('scopes_supported não contém todos os escopos do provedor no registro');
   return erros;
 }
 
