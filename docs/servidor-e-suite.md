@@ -131,7 +131,7 @@ Todas as chamadas levam `Authorization: Bearer {token}` (o `controle.token` da c
 
 ### Modo de violações
 
-`servidor-de-exemplo/violacoes.ts` lista 109 regras que o servidor pode quebrar de propósito, cada uma com os requisitos que ela viola. `node servidor-de-exemplo/principal.ts --listar-violacoes` mostra a lista, e `pnpm servidor -- --violacao par-sem-pkce` sobe o servidor com uma delas. O teste `suite-de-conformidade/testes/violacoes.test.ts` sobe o servidor com uma violação de cada vez e exige que a suíte reprove o requisito correspondente. É o que prova que a suíte não aprova qualquer coisa.
+`servidor-de-exemplo/violacoes.ts` lista 110 regras que o servidor pode quebrar de propósito, cada uma com os requisitos que ela viola. `node servidor-de-exemplo/principal.ts --listar-violacoes` mostra a lista, e `pnpm servidor -- --violacao par-sem-pkce` sobe o servidor com uma delas. O teste `suite-de-conformidade/testes/violacoes.test.ts` sobe o servidor com uma violação de cada vez e exige que a suíte reprove o requisito correspondente. É o que prova que a suíte não aprova qualquer coisa.
 
 ### Contêiner
 

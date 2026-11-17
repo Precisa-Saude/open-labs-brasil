@@ -6,6 +6,21 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 export const SISTEMA_DE_ERROS = 'urn:open-labs-brasil:error-code';
 
+/**
+ * URL da requisição sobre a origem do host. Com `new URL(req.url, base)`, um caminho como
+ * `//outro.example/x` viraria outro host, e `//` sozinho nem é URL. Devolve undefined quando
+ * o alvo não é um caminho.
+ */
+export function urlDaRequisicao(req: IncomingMessage, base: string): URL | undefined {
+  const caminho = req.url ?? '/';
+  if (!caminho.startsWith('/')) return undefined;
+  try {
+    return new URL(`${new URL(base).origin}${caminho}`);
+  } catch {
+    return undefined;
+  }
+}
+
 export class ErroDeApi extends Error {
   readonly status: number;
   readonly codigo: string;

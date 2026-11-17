@@ -23,7 +23,15 @@ import { type ConfiguracaoDoServidor, Relogio } from './configuracao.ts';
 import { tratarConsentimentos } from './consentimentos.ts';
 import { tratarControle } from './controle.ts';
 import { tratarFhir } from './fhir.ts';
-import { enviarFhir, enviarHtml, enviarJson, ErroDeApi, novoId, operationOutcome } from './http.ts';
+import {
+  enviarFhir,
+  enviarHtml,
+  enviarJson,
+  ErroDeApi,
+  novoId,
+  operationOutcome,
+  urlDaRequisicao,
+} from './http.ts';
 import { paginaDeErro } from './paginas.ts';
 import { Provedor } from './provedor.ts';
 import { comTratamentoDeErros } from './recursos.ts';
@@ -111,7 +119,8 @@ export async function iniciarServidor(
     tls,
     comCaptura(async (req, res) => {
       cabecalhosComuns(res, provedor);
-      const url = new URL(req.url ?? '/', provedor.issuer);
+      const url = urlDaRequisicao(req, provedor.issuer);
+      if (!url) return enviarHtml(res, 400, paginaDeErro('Requisição inválida.'));
       const compartilhamentos = new URL(provedor.participante.provider!.consent_management_uri)
         .pathname;
       if (provedor.violacao('cors-na-autorizacao') && url.pathname.startsWith('/authorize'))
@@ -135,7 +144,17 @@ export async function iniciarServidor(
     { ...tls, ca: readFileSync(cfg.tls.caConfiavel), rejectUnauthorized: false, requestCert: true },
     comCaptura(async (req, res) => {
       cabecalhosComuns(res, provedor);
-      const url = new URL(req.url ?? '/', provedor.urlMtls);
+      const url = urlDaRequisicao(req, provedor.urlMtls);
+      if (!url) {
+        return comTratamentoDeErros(provedor, req, res, async () => {
+          throw new ErroDeApi(
+            400,
+            'INVALID_REQUEST',
+            'invalid',
+            'O alvo da requisição precisa ser um caminho.',
+          );
+        });
+      }
       const api = new URL(provedor.apiBaseUrl).pathname.replace(/\/$/, '');
       const fhir = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
       if (provedor.emManutencao) {

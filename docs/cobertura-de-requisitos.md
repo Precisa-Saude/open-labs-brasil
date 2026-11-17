@@ -2,7 +2,7 @@
 
 Gerado por `node ferramentas/gerar-cobertura.ts` a partir de [09-versionamento-e-conformidade.md](../especificacao/09-versionamento-e-conformidade.md), da lista de testes da suíte e do relatório de `pnpm conformidade:local`. Não edite à mão: rode os dois comandos de novo.
 
-Relatório usado: 2026-11-17T03:08:17.787Z. Contra o servidor de exemplo: 128 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 132 requisitos de provedor.
+Relatório usado: 2026-11-17T18:40:25.584Z. Contra o servidor de exemplo: 128 aprovados, 0 reprovados, 4 não verificáveis automaticamente, de 132 requisitos de provedor.
 
 Colunas:
 
@@ -101,7 +101,7 @@ Colunas:
 | API-011 | Leitura por id de recurso de outro paciente devolve 404 | `api.ts` | aprovado | `paciente-de-outro-visivel` |
 | API-012 | Todo `link` de paginação fica dentro do `fhir_base_url` do registro | `api.ts` | aprovado | `paginacao-fora-da-base` |
 | API-013 | Todo `link` de paginação é URL absoluta com esquema `https` e sem componente de usuário | `api.ts` | aprovado | `paginacao-relativa`, `paginacao-com-usuario` |
-| CAT-001 | Suporta `ActivityDefinition` com `status`, `url`, `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `busca-por-url-ignorada` |
+| CAT-001 | Suporta `ActivityDefinition` com `status`, `url`, `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `bundle-com-entry-vazio`, `busca-por-url-ignorada` |
 | CAT-002 | Suporta `ChargeItemDefinition` com `status`, `url`, `jurisdiction`, `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `busca-por-url-ignorada` |
 | CAT-003 | Item retirado continua legível com `status` igual a `retired` e aparece na busca por `_lastUpdated` | `catalogo-e-agenda.ts` | aprovado | `retirado-invisivel` |
 | CAT-004 | Todo `ChargeItemDefinition` ativo tem `code` igual ao de algum `ActivityDefinition` | `catalogo-e-agenda.ts` | aprovado | `preco-sem-exame` |
@@ -131,7 +131,7 @@ Colunas:
 | AGD-015 | Aceita `If-None-Exist` na forma literal `identifier={system}\\|{value}` e na forma com `%7C` no lugar da barra vertical | `agendamento.ts` | aprovado | `if-none-exist-so-literal` |
 | AGD-016 | Devolve o link de pagamento em `Appointment.extension` com a URL canônica `https://fhir-brasil.dev.br/ig/StructureDefinition/payment-link` e `valueUrl` com esquema `https`, e em nenhum outro lugar | `agendamento.ts` | aprovado | `link-de-pagamento-em-comment` |
 | AGD-017 | Recusa `Appointment` cujo identificador do receptor tem caractere fora do conjunto permitido | `agendamento.ts` | aprovado | `aceita-identificador-invalido` |
-| RES-001 | Suporta `DiagnosticReport` com `patient`, `_lastUpdated`, `date`, `status` e `_include=DiagnosticReport:result` | `resultados-e-erros.ts` | aprovado | `include-ignorado` |
+| RES-001 | Suporta `DiagnosticReport` com `patient`, `_lastUpdated`, `date`, `status` e `_include=DiagnosticReport:result` | `resultados-e-erros.ts` | aprovado | `bundle-com-entry-vazio`, `include-ignorado` |
 | RES-002 | Suporta `Observation` com `patient`, `code`, `date`, `_lastUpdated` | `resultados-e-erros.ts` | aprovado |  |
 | RES-003 | Busca com `patient` diferente do paciente do consentimento devolve 403 `PATIENT_NOT_IN_CONSENT` | `resultados-e-erros.ts` | aprovado | `parametro-patient-ignorado` |
 | RES-004 | Só devolve laudos `final`, `amended` ou `corrected` já liberados ao paciente | `resultados-e-erros.ts` | aprovado | `laudo-parcial-visivel` |

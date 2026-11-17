@@ -40,6 +40,12 @@ function dataValida(texto: string): boolean {
   return !Number.isNaN(ms) && new Date(ms).toISOString().startsWith(texto);
 }
 
+/** O Date.parse aceita 31 de fevereiro e devolve 3 de março: a data precisa voltar igual. */
+function instanteValido(texto: string): boolean {
+  const ms = Date.parse(texto);
+  return !Number.isNaN(ms) && new Date(ms).toISOString().replace(/\.000Z$/, 'Z') === texto;
+}
+
 interface CorpoValidado {
   data_period?: { start?: string; end?: string };
   expiraEm: number;
@@ -78,7 +84,7 @@ function validarCriacao(
   if (
     typeof obj.expiration_date_time !== 'string' ||
     !PADRAO_INSTANTE.test(obj.expiration_date_time) ||
-    Number.isNaN(Date.parse(obj.expiration_date_time))
+    !instanteValido(obj.expiration_date_time)
   ) {
     throw invalida(
       'expiration_date_time precisa ser data e hora UTC sem fração de segundo.',

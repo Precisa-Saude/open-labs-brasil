@@ -10,6 +10,7 @@ import {
   codeableConcepts,
   codigoSimples,
   type DefinicaoDeParametro,
+  dividirOu,
   faixaDeData,
   filtrar,
   type ParametroDaBusca,
@@ -64,11 +65,26 @@ const pacienteRef = (pegar: (r: Recurso) => unknown): DefinicaoDeParametro => ({
   tipo: 'reference',
 });
 
-function dentroDoPeriodo(ctx: Contexto, efetivo: unknown): boolean {
-  if (ctx.provedor.violacao('data-period-ignorado')) return true;
-  const dp = ctx.consentimento?.data_period;
-  if (!dp || typeof efetivo !== 'string') return true;
-  const faixa = faixaDeData(efetivo);
+/** Data clínica do resultado: effectiveDateTime, ou o início (na falta dele, o fim) de effectivePeriod. */
+function dataClinica(recurso: Record<string, unknown>): string | undefined {
+  if (typeof recurso.effectiveDateTime === 'string') return recurso.effectiveDateTime;
+  const periodo = recurso.effectivePeriod as { start?: unknown; end?: unknown } | undefined;
+  if (typeof periodo?.start === 'string') return periodo.start;
+  if (typeof periodo?.end === 'string') return periodo.end;
+  return undefined;
+}
+
+/**
+ * Seção 3.3, regra 7: com data_period, só resultados com data clínica dentro do período.
+ * Um resultado sem data clínica legível não prova que está dentro, e fica de fora.
+ */
+export function dentroDoPeriodo(
+  dp: { start?: string; end?: string } | undefined,
+  recurso: Record<string, unknown>,
+): boolean {
+  if (!dp) return true;
+  const efetivo = dataClinica(recurso);
+  const faixa = efetivo === undefined ? undefined : faixaDeData(efetivo);
   if (!faixa) return false;
   if (dp.start && faixa[0] < faixaDeData(dp.start)![0]) return false;
   if (dp.end && faixa[0] >= faixaDeData(dp.end)![1]) return false;
@@ -81,7 +97,8 @@ function resultadoVisivel(reg: Registro, ctx: Contexto): boolean {
     if (!reg.liberado) return false;
     if (!ESTADOS_DE_LAUDO_VISIVEIS.includes(String(reg.recurso.status))) return false;
   }
-  return dentroDoPeriodo(ctx, reg.recurso.effectiveDateTime);
+  if (ctx.provedor.violacao('data-period-ignorado')) return true;
+  return dentroDoPeriodo(ctx.consentimento?.data_period, reg.recurso);
 }
 
 const TIPOS: Record<string, ConfiguracaoDoTipo> = {
@@ -438,17 +455,22 @@ function examesForaDaUnidade(ctx: Contexto, parametros: ParametroDaBusca[]): str
       ?.reference?.replace('Location/', '');
     const exames = unidade ? (ctx.provedor.dados.examesPorUnidade.get(unidade) ?? []) : [];
     for (const t of tipos) {
-      const barra = t.indexOf('|');
-      const [sistema, codigo] =
-        barra >= 0 ? [t.slice(0, barra), t.slice(barra + 1)] : [undefined, t];
-      const coleta = exames.some((e) => {
-        const codings = [
-          ...(e.loinc ? [{ code: e.loinc.code, system: 'http://loinc.org' }] : []),
-          { code: e.codigoProprio, system: 'https://laboratorio.example/fhir/produtos' },
-        ];
-        return codings.some(
-          (c) => c.code === codigo && (sistema === undefined || c.system === sistema),
-        );
+      // Vírgula é "ou" [FHIR-SEARCH]: basta uma das alternativas ser coletada na unidade.
+      const coleta = dividirOu(t).some((alternativa) => {
+        const barra = alternativa.indexOf('|');
+        const [sistema, codigo] =
+          barra >= 0
+            ? [alternativa.slice(0, barra), alternativa.slice(barra + 1)]
+            : [undefined, alternativa];
+        return exames.some((e) => {
+          const codings = [
+            ...(e.loinc ? [{ code: e.loinc.code, system: 'http://loinc.org' }] : []),
+            { code: e.codigoProprio, system: 'https://laboratorio.example/fhir/produtos' },
+          ];
+          return codings.some(
+            (c) => c.code === codigo && (sistema === undefined || c.system === sistema),
+          );
+        });
       });
       if (!coleta && !faltando.includes(t)) faltando.push(t);
     }
@@ -609,12 +631,14 @@ function buscar(
       }
     }
   }
+  // O FHIR JSON não admite lista vazia: sem resultado, o Bundle vai sem entry.
+  const entry = [...entradas, ...entradasExtras];
   enviarFhir(res, 200, {
-    entry: [...entradas, ...entradasExtras],
     link: links,
     resourceType: 'Bundle',
     total: encontrados.length,
     type: 'searchset',
+    ...(entry.length > 0 || provedor.violacao('bundle-com-entry-vazio') ? { entry } : {}),
   });
 }
 

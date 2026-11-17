@@ -105,7 +105,8 @@ function normalizarTexto(t: string): string {
     .toLowerCase();
 }
 
-function dividirOu(valor: string): string[] {
+/** Alternativas de um valor de busca: vírgula é "ou", e `\,` é vírgula literal. */
+export function dividirOu(valor: string): string[] {
   return valor.split(/(?<!\\),/).map((v) => v.replace(/\\,/g, ','));
 }
 
