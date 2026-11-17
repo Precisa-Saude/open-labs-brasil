@@ -55,6 +55,29 @@ export interface ResultadoDaJornada {
   status: number;
   location?: string;
   pagina_de_erro?: string;
+  /** Como a jornada foi feita: pelas páginas reais ou pela interface de controle. */
+  origem: 'formulario' | 'controle';
+  /** Cada requisição da jornada pelas páginas, com o status recebido. */
+  saltos: Array<{ metodo: string; url: string; status: number }>;
+  /** HTML da tela de consentimento, na jornada pelas páginas. */
+  telaDeConsentimento?: string;
+}
+
+const ENTIDADES: Record<string, string> = { '&amp;': '&', '&quot;': '"', '&#39;': "'", '&lt;': '<', '&gt;': '>' };
+const desescapar = (t: string) => t.replace(/&(amp|quot|#39|lt|gt);/g, (m) => ENTIDADES[m]!);
+
+/** Primeiro formulário POST da página: endereço e campos ocultos. */
+export function lerFormulario(html: string, base: string): { acao: string; campos: Record<string, string> } | undefined {
+  const inicio = /<form\b[^>]*>/i.exec(html);
+  if (!inicio || !/method\s*=\s*"post"/i.test(inicio[0])) return undefined;
+  const acao = desescapar(/action\s*=\s*"([^"]*)"/i.exec(inicio[0])?.[1] ?? '');
+  const corpo = html.slice(inicio.index, html.indexOf('</form>', inicio.index) >>> 0);
+  const campos: Record<string, string> = {};
+  for (const m of corpo.matchAll(/<input\b[^>]*>/gi)) {
+    const atributos = Object.fromEntries([...m[0].matchAll(/([\w-]+)\s*=\s*"([^"]*)"/g)].map((a) => [a[1]!.toLowerCase(), desescapar(a[2]!)]));
+    if (atributos.type === 'hidden' && atributos.name) campos[atributos.name] = atributos.value ?? '';
+  }
+  return { acao: new URL(acao || base, base).toString(), campos };
 }
 
 function pkce(): { verificador: string; desafio: string } {
@@ -435,8 +458,13 @@ export class Contexto {
     return u.toString();
   }
 
-  /** O paciente de teste conclui a jornada (login e decisão) pela interface de controle. */
+  /**
+   * O paciente de teste conclui a jornada (login e decisão): pelas páginas
+   * reais do provedor quando a configuração descreve os formulários, senão
+   * pela interface de controle.
+   */
   async jornada(clientId: string, requestUri: string, paciente: PacienteDeTeste, decisao: 'aprovar' | 'recusar' = 'aprovar'): Promise<ResultadoDaJornada> {
+    if (this.cfg.jornada_por_formulario) return this.jornadaPorFormulario(clientId, requestUri, paciente, decisao);
     this.exigirControle('concluir a jornada do paciente');
     const r = await this.controle('POST', '/_controle/jornada', {
       client_id: clientId,
@@ -446,7 +474,57 @@ export class Contexto {
       decisao,
     });
     if (r.status !== 200) falhar(`interface de controle recusou a jornada: ${r.status} ${JSON.stringify(r.json)}`);
-    return r.json as unknown as ResultadoDaJornada;
+    return { ...(r.json as { status: number; location?: string; pagina_de_erro?: string }), origem: 'controle', saltos: [] };
+  }
+
+  private async jornadaPorFormulario(clientId: string, requestUri: string, paciente: PacienteDeTeste, decisao: 'aprovar' | 'recusar'): Promise<ResultadoDaJornada> {
+    const f = this.cfg.jornada_por_formulario!;
+    const senha = paciente.senha ?? naoVerificavel(`a configuração não traz a senha do paciente de teste ${paciente.usuario}`);
+    const destino = new URL([...this.clientes.values()].find((c) => c.clientId === clientId)?.redirectUri ?? 'https://destino.invalido/');
+    const saltos: ResultadoDaJornada['saltos'] = [];
+    const pedir = async (metodo: string, url: string, campos?: Record<string, string>) => {
+      const r = await this.http.requisitar(url, {
+        metodo,
+        credencial: null,
+        ...(campos ? { cabecalhos: { 'content-type': 'application/x-www-form-urlencoded' }, corpo: new URLSearchParams(campos).toString() } : {}),
+      });
+      saltos.push({ metodo, url: url.replace(/\?.*$/, ''), status: r.status });
+      return r;
+    };
+    const eDestino = (u: string) => {
+      const x = new URL(u);
+      return x.origin === destino.origin && x.pathname === destino.pathname;
+    };
+    /** Segue redirecionamentos dentro do provedor; para no destino do receptor. */
+    const seguir = async (r: Resposta, url: string): Promise<{ r: Resposta; url: string; final?: string }> => {
+      for (let i = 0; i < 5; i++) {
+        const loc = r.cabecalhos.location;
+        if (r.status < 300 || r.status >= 400 || typeof loc !== 'string') return { r, url };
+        const proximo = new URL(loc, url).toString();
+        if (eDestino(proximo)) return { r, url, final: proximo };
+        url = proximo;
+        r = await pedir('GET', url);
+      }
+      return { r, url };
+    };
+    const encerrar = (p: { r: Resposta; final?: string }, tela?: string): ResultadoDaJornada => ({
+      status: p.r.status,
+      ...(p.final ? { location: p.final } : { pagina_de_erro: p.r.texto.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) }),
+      origem: 'formulario',
+      saltos,
+      ...(tela ? { telaDeConsentimento: tela } : {}),
+    });
+    let url = this.urlDeAutorizacao(clientId, requestUri);
+    let passo = await seguir(await pedir('GET', url), url);
+    if (passo.final || passo.r.status >= 400) return encerrar(passo);
+    const login = lerFormulario(passo.r.texto, passo.url) ?? falhar('a página de login não tem formulário POST');
+    passo = await seguir(await pedir('POST', login.acao, { ...login.campos, [f.campo_usuario]: paciente.usuario, [f.campo_senha]: senha }), login.acao);
+    if (passo.final || passo.r.status >= 400) return encerrar(passo);
+    const tela = passo.r.texto;
+    const consentimento = lerFormulario(tela, passo.url) ?? falhar('a tela de consentimento não tem formulário POST');
+    url = consentimento.acao;
+    passo = await seguir(await pedir('POST', url, { ...consentimento.campos, [f.campo_decisao]: decisao === 'aprovar' ? f.valor_aprovar : f.valor_recusar }), url);
+    return encerrar(passo, tela);
   }
 
   async trocarCodigo(c: ClienteDeTeste, code: string, verificador: string, redirectUri: string, credencial?: CredencialTls): Promise<Resposta> {

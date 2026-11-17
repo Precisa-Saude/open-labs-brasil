@@ -131,7 +131,7 @@ const TIPOS: Record<string, ConfiguracaoDoTipo> = {
   Appointment: {
     tipoDeToken: 'paciente', escopo: 'appointment.write', perfil: 'br-lab-appointment',
     parametros: {
-      patient: pacienteRef((r) => (r.participant as Array<{ actor?: unknown }>).map((p) => p.actor)),
+      patient: { tipo: 'reference', alvo: 'Patient', extrair: (reg) => (reg.pacienteId ? [`Patient/${reg.pacienteId}`] : []) },
       status: statusToken,
       date: { tipo: 'date', extrair: (r) => [r.recurso.start] },
       identifier: {
@@ -461,7 +461,14 @@ export function capacidades(provedor: Provedor): Recurso {
 export async function tratarFhir(provedor: Provedor, req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   await comTratamentoDeErros(provedor, req, res, async () => {
     const base = new URL(provedor.fhirBaseUrl).pathname.replace(/\/$/, '');
-    const partes = url.pathname.slice(base.length).split('/').filter(Boolean).map(decodeURIComponent);
+    const brutas = url.pathname.slice(base.length).split('/').filter(Boolean);
+    let partes: string[];
+    try {
+      partes = brutas.map(decodeURIComponent);
+    } catch {
+      autenticarRecurso(provedor, req, url);
+      throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', 'Caminho com codificação inválida.');
+    }
 
     if (partes.length === 1 && partes[0] === 'metadata') {
       exigirCertificado(provedor, req);

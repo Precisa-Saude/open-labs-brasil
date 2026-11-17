@@ -13,7 +13,7 @@ import { Relogio, type ConfiguracaoDoServidor } from './configuracao.ts';
 import { tratarConsentimentos } from './consentimentos.ts';
 import { tratarControle } from './controle.ts';
 import { tratarFhir } from './fhir.ts';
-import { enviarFhir, enviarHtml, enviarJson, ErroDeApi, operationOutcome } from './http.ts';
+import { enviarFhir, enviarHtml, enviarJson, ErroDeApi, novoId, operationOutcome } from './http.ts';
 import { paginaDeErro } from './paginas.ts';
 import { Provedor } from './provedor.ts';
 import { comTratamentoDeErros } from './recursos.ts';
@@ -68,7 +68,10 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
   const comCaptura = (tratar: (req: IncomingMessage, res: ServerResponse) => Promise<void>) => (req: IncomingMessage, res: ServerResponse) => {
     tratar(req, res).catch((e: unknown) => {
       log(`falha não tratada: ${(e as Error).stack ?? String(e)}`);
-      if (!res.headersSent) enviarFhir(res, 500, operationOutcome(new ErroDeApi(500, 'INTERNAL_ERROR', 'exception', 'Falha interna.')));
+      if (!res.headersSent) {
+        if (!res.hasHeader('x-fapi-interaction-id')) res.setHeader('x-fapi-interaction-id', novoId());
+        enviarFhir(res, 500, operationOutcome(new ErroDeApi(500, 'INTERNAL_ERROR', 'exception', 'Falha interna.')));
+      }
       else res.destroy();
     });
   };
@@ -111,7 +114,9 @@ export async function iniciarServidor(cfg: ConfiguracaoDoServidor, opcoes: { rel
       provedor.dados.garantirAgendas(provedor.relogio.agoraMs());
       return tratarFhir(provedor, req, res, url);
     }
-    return enviarFhir(res, 404, operationOutcome(new ErroDeApi(404, 'RESOURCE_NOT_FOUND', 'not-found', 'Endpoint inexistente.')));
+    return comTratamentoDeErros(provedor, req, res, async () => {
+      throw new ErroDeApi(404, 'RESOURCE_NOT_FOUND', 'not-found', 'Endpoint inexistente.');
+    });
   }));
 
   const controle = cfg.controle.habilitado

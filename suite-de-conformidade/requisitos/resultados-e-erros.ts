@@ -45,6 +45,10 @@ export const testesDeResultadosEErros: Teste[] = [
       const status = String(todos[0]!.status);
       const porStatus = (await todasAsPaginas(ctx, a.accessToken, `DiagnosticReport?patient=${ref}&status=${status}`)).recursos;
       esperar(porStatus.length > 0 && porStatus.every((d) => d.status === status), `status=${status} incorreto`);
+      const cancelados = recursos(sucesso(await ctx.fhir(a.accessToken, `DiagnosticReport?patient=${ref}&status=cancelled`)));
+      esperar(cancelados.every((d) => d.status === 'cancelled'), 'status=cancelled devolveu laudo em outro estado: o parâmetro parece ignorado');
+      const semCodigo = recursos(sucesso(await ctx.fhir(a.accessToken, `DiagnosticReport?patient=${ref}&date=lt1900-01-01`)));
+      esperar(semCodigo.length === 0, 'date=lt1900-01-01 devolveu laudos: o parâmetro parece ignorado');
       const comInclude = sucesso(await ctx.fhir(a.accessToken, `DiagnosticReport?patient=${ref}&_include=DiagnosticReport:result&_count=100`));
       const incluidos = new Set(recursos(comInclude, 'include').map((o) => `Observation/${o.id}`));
       const referidos = recursos(comInclude).flatMap((d) => lista(d.result).map((x) => String(x.reference)));
@@ -301,6 +305,7 @@ export const testesDeResultadosEErros: Teste[] = [
       esperar(u.searchParams.get('error') === 'access_denied', 'sem error=access_denied');
       esperar(u.searchParams.get('iss') === ctx.issuer, `iss na resposta de erro: ${u.searchParams.get('iss') ?? '(ausente)'}`);
       esperar(u.searchParams.get('state') === state, 'state ausente ou diferente na resposta de erro');
+      if (j.origem === 'controle') r.marcarParcial('o redirecionamento veio da interface de controle, e não das páginas reais (configure jornada_por_formulario)');
       r.evidencia('error=access_denied com state e iss');
     },
   },

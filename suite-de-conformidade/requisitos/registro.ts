@@ -288,22 +288,25 @@ export const testesDeRegistro: Teste[] = [
       const c = ctx.cliente('principal');
       exigirPublicacao(ctx);
       const chave = await chaveDoRegistro(ctx);
-      const autorizado = await ctx.autorizar(c);
-      const aguardando = await ctx.novoConsentimento(c);
       await ctx.sincronizarRelogio();
       const expira = Date.parse(ctx.registroDoProvedorExpiraEm ?? ctx.registroAceito.documento.expires_at);
-      await ctx.avancarRelogio(Math.ceil((expira - ctx.agoraMs()) / 1000) + 3600);
-      r.evidencia('relógio do provedor 1 hora depois de expires_at');
-      // O consentimento à espera também venceu (60 minutos), então invalid_request é uma recusa aceitável aqui.
-      erroOAuth((await ctx.par(c, aguardando)).resposta, 400, ['unauthorized_client', 'invalid_request']);
-      erroOAuth(await ctx.tokenCc(c, ['catalog.read']), 400, 'unauthorized_client');
+      // Dez minutos antes do vencimento: um consentimento autorizado e um à espera, que ainda não vence (60 minutos).
+      await ctx.avancarRelogio(Math.max(1, Math.ceil((expira - ctx.agoraMs()) / 1000) - 600));
+      const autorizado = await ctx.autorizar(c);
+      const aguardando = await ctx.novoConsentimento(c);
+      await ctx.avancarRelogio(1200);
+      r.evidencia('relógio do provedor 10 minutos depois de expires_at');
+      erroOAuth((await ctx.par(c, aguardando)).resposta, 400, 'unauthorized_client');
+      const deProvedor = ['catalog.read', 'locations.read', 'schedule.read'].filter((s) => ctx.provedor.provider!.scopes_supported.includes(s as never));
+      for (const escopo of deProvedor) erroOAuth(await ctx.tokenCc(c, [escopo]), 400, 'unauthorized_client');
+      erroOAuth(await ctx.tokenCc(c, ['consent.manage', 'catalog.read']), 400, ['unauthorized_client', 'invalid_scope']);
       const token = await ctx.tokenDeProvedor(c, 'consent.manage');
       const lido = await ctx.consentimentos('GET', `/${autorizado.consentId}`, token);
       esperar(lido.status === 200, `GET de consentimento no modo restrito: ${resumo(lido)}`);
       const del = await ctx.consentimentos('DELETE', `/${autorizado.consentId}?reason=PATIENT_REQUEST`, token);
       esperar(del.status === 204, `DELETE no modo restrito: ${resumo(del)}`);
       erroApi(await ctx.consentimentos('POST', '', token, { corpo: ctx.corpoDeConsentimento() }), 403, 'REGISTRY_EXPIRED');
-      r.evidencia('dia 1: PAR e catalog.read unauthorized_client; consent.manage aceito; GET 200; DELETE 204; POST /consents 403 REGISTRY_EXPIRED');
+      r.evidencia(`dia 1: PAR unauthorized_client; ${deProvedor.join(', ')} sozinhos e consent.manage com catalog.read recusados; consent.manage sozinho aceito; GET 200; DELETE 204; POST /consents 403 REGISTRY_EXPIRED`);
       await ctx.avancarRelogio(7 * 24 * 3600);
       erroOAuth(await ctx.tokenCc(c, ['consent.manage']), 400, 'unauthorized_client');
       r.evidencia('dia 8: consent.manage unauthorized_client');

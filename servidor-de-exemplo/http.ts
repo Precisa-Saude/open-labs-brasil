@@ -71,7 +71,7 @@ export async function lerCorpo(req: IncomingMessage, limite = 1_000_000): Promis
   for await (const parte of req) {
     const b = parte as Buffer;
     total += b.length;
-    if (total > limite) throw new ErroDeApi(413, 'INVALID_REQUEST', 'invalid', 'Corpo da requisição grande demais.');
+    if (total > limite) throw new ErroDeApi(400, 'INVALID_REQUEST', 'invalid', 'Corpo da requisição grande demais.');
     partes.push(b);
   }
   return Buffer.concat(partes);

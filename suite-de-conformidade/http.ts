@@ -117,7 +117,7 @@ export class ClienteHttp {
         socket.destroy();
         resolver(r);
       };
-      socket.setTimeout(10_000, () => fim({ ok: false, erro: 'tempo esgotado' }));
+      socket.setTimeout(5_000, () => fim({ ok: false, erro: 'tempo esgotado' }));
       socket.once('secureConnect', () => fim({ ok: true, versao: socket.getProtocol() ?? '?', suite: socket.getCipher()?.name ?? '?' }));
       socket.once('error', (e) => fim({ ok: false, erro: e.message }));
     });

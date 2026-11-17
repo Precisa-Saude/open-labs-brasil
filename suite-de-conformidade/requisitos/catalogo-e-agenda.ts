@@ -51,6 +51,8 @@ export const testesDeCatalogoEAgenda: Teste[] = [
       esperar(porMunicipio.every((p) => lista(p.jurisdiction).some((x) => lista(x.coding).some((c) => c.system === j.system && c.code === j.code))), 'busca por jurisdiction devolveu preço de outro município');
       const futuro = recursos(sucesso(await ctx.fhir(token, `ChargeItemDefinition?_lastUpdated=gt${instanteComMs(ctx.agoraMs() + 365 * 24 * 3600_000)}`)));
       esperar(futuro.length === 0, '_lastUpdated no futuro devolveu preços');
+      const semMunicipio = recursos(sucesso(await ctx.fhir(token, `ChargeItemDefinition?jurisdiction=${encodeURIComponent(`${String(j.system)}|0000000`)}`)));
+      esperar(semMunicipio.length === 0, 'jurisdiction inexistente devolveu preços: o parâmetro parece ignorado');
       r.evidencia(`${precos.length} preços; url, jurisdiction ${token2} (${porMunicipio.length}) e _lastUpdated conferidos`);
     },
   },
@@ -104,7 +106,11 @@ export const testesDeCatalogoEAgenda: Teste[] = [
       const porCidade = recursos(sucesso(await ctx.fhir(token, `Location?address-city=${encodeURIComponent(cidade)}`)));
       esperar(porCidade.some((l) => l.id === alvo.id) && porCidade.every((l) => String((l.address as Json).city).toLowerCase().startsWith(cidade.toLowerCase())), 'busca por address-city incorreta');
       const porUf = recursos(sucesso(await ctx.fhir(token, `Location?address-state=${encodeURIComponent(uf)}`)));
-      esperar(porUf.some((l) => l.id === alvo.id), 'busca por address-state não devolveu a unidade');
+      esperar(porUf.some((l) => l.id === alvo.id) && porUf.every((l) => String((l.address as Json).state).toLowerCase().startsWith(uf.toLowerCase())), 'busca por address-state incorreta');
+      for (const vazio of ['address-city=Cidade%20Que%20Nao%20Existe', 'address-state=ZZ', 'status=suspended']) {
+        const nada = recursos(sucesso(await ctx.fhir(token, `Location?${vazio}`)));
+        esperar(nada.every((l) => vazio !== 'status=suspended' || l.status === 'suspended') && (vazio === 'status=suspended' || nada.length === 0), `Location?${vazio} devolveu ${nada.length} unidades: o parâmetro parece ignorado`);
+      }
       const futuro = recursos(sucesso(await ctx.fhir(token, `Location?_lastUpdated=gt${instanteComMs(ctx.agoraMs() + 365 * 24 * 3600_000)}`)));
       esperar(futuro.length === 0, '_lastUpdated no futuro devolveu unidades');
       r.evidencia(`${ativas.length} unidades; ${cidade}/${uf} conferidos`);
@@ -129,6 +135,10 @@ export const testesDeCatalogoEAgenda: Teste[] = [
       esperar(servicos.every((s) => s.active === true && lista(s.location).some((l) => l.reference === `Location/${unidade.id}`)), 'serviço de outra unidade ou inativo');
       const todos = (await todasAsPaginas(ctx, token, 'HealthcareService?_count=100')).recursos;
       esperar(todos.length >= servicos.length, 'a busca sem filtro devolveu menos serviços que a filtrada');
+      const inativos = recursos(sucesso(await ctx.fhir(token, `HealthcareService?location=Location/${unidade.id}&active=false`)));
+      esperar(inativos.every((s) => s.active === false), 'active=false devolveu serviço ativo: o parâmetro parece ignorado');
+      const deNenhuma = recursos(sucesso(await ctx.fhir(token, 'HealthcareService?location=Location/unidade-que-nao-existe')));
+      esperar(deNenhuma.length === 0, 'location inexistente devolveu serviços: o parâmetro parece ignorado');
       const futuro = recursos(sucesso(await ctx.fhir(token, `HealthcareService?_lastUpdated=gt${instanteComMs(ctx.agoraMs() + 365 * 24 * 3600_000)}`)));
       esperar(futuro.length === 0, '_lastUpdated no futuro devolveu serviços');
       r.evidencia(`${servicos.length} serviços em Location/${unidade.id}`);
@@ -154,6 +164,10 @@ export const testesDeCatalogoEAgenda: Teste[] = [
       const b = recursos(sucesso(await ctx.fhir(token, `Schedule?actor=${encodeURIComponent(unidade)}&active=true`)));
       esperar(b.length > 0, `nenhuma agenda para ${unidade}`);
       esperar(b.every((s) => s.active === true && lista(s.actor).some((a) => a.reference === unidade)), 'agenda de outra unidade ou inativa');
+      const inativas = recursos(sucesso(await ctx.fhir(token, `Schedule?actor=${encodeURIComponent(unidade)}&active=false`)));
+      esperar(inativas.every((s) => s.active === false), 'active=false devolveu agenda ativa: o parâmetro parece ignorado');
+      const deNenhuma = recursos(sucesso(await ctx.fhir(token, 'Schedule?actor=Location/unidade-que-nao-existe')));
+      esperar(deNenhuma.length === 0, 'actor inexistente devolveu agendas: o parâmetro parece ignorado');
       r.evidencia(`${b.length} agenda(s) de ${unidade}`);
     },
   },

@@ -56,7 +56,11 @@ async function lerFormularioOAuth(req: IncomingMessage): Promise<Map<string, str
   if (tipoDoConteudo(req) !== 'application/x-www-form-urlencoded') {
     throw new ErroOAuth(400, 'invalid_request', 'Content-Type precisa ser application/x-www-form-urlencoded');
   }
-  return lerFormulario(await lerCorpo(req));
+  try {
+    return lerFormulario(await lerCorpo(req));
+  } catch {
+    throw new ErroOAuth(400, 'invalid_request', 'corpo da requisição ilegível ou grande demais');
+  }
 }
 
 function valor(form: Map<string, string[]>, nome: string, obrigatorio = false): string | undefined {

@@ -1,9 +1,9 @@
 // CNS: consentimento (seção 9.3).
 
 import type { ClienteDeTeste, Contexto } from '../contexto.ts';
-import type { Resposta } from '../http.ts';
-import { esperar, falhar } from '../resultado.ts';
-import { erroApi, erroOAuth, resumo, sucesso, type Json } from '../verificacoes.ts';
+import { cabecalhoUnico, type Resposta } from '../http.ts';
+import { esperar, falhar, naoVerificavel } from '../resultado.ts';
+import { codigoDoErro, erroApi, erroOAuth, resumo, sucesso, type Json } from '../verificacoes.ts';
 import type { Teste } from './tipos.ts';
 
 async function lerComProvedor(ctx: Contexto, c: ClienteDeTeste, id: string): Promise<Json> {
@@ -13,6 +13,13 @@ async function lerComProvedor(ctx: Contexto, c: ClienteDeTeste, id: string): Pro
 function estado(corpo: Json): { status: unknown; code: unknown; via: unknown } {
   const motivo = corpo.status_reason as { code?: unknown; ended_via?: unknown } | undefined;
   return { status: corpo.status, code: motivo?.code, via: motivo?.ended_via };
+}
+
+/** 401 com invalid_token; o código do protocolo esperado é o do consentimento, e TOKEN_INVALID também é aceito. */
+export function tokenRecusado(r: Resposta, esperado: 'CONSENT_EXPIRED' | 'CONSENT_REVOKED'): void {
+  const codigo = codigoDoErro(r);
+  esperar(r.status === 401 && (codigo === esperado || codigo === 'TOKEN_INVALID'), `esperado 401 ${esperado}: ${resumo(r)}`);
+  esperar(/error="invalid_token"/.test(cabecalhoUnico(r, 'www-authenticate') ?? ''), 'WWW-Authenticate sem invalid_token');
 }
 
 async function criarComCorpo(ctx: Contexto, c: ClienteDeTeste, corpo: unknown): Promise<Resposta> {
@@ -118,8 +125,20 @@ export const testesDeConsentimento: Teste[] = [
   {
     id: 'CNS-008',
     titulo: 'Tela de consentimento com receptor, escopos, finalidade, validade e aviso do CPF',
-    executar: async (_ctx, r) => {
-      r.marcarParcial('o conteúdo da tela de consentimento depende de inspeção humana (seção 9.3); o servidor de exemplo é conferido nos testes dele');
+    executar: async (ctx, r) => {
+      if (!ctx.cfg.jornada_por_formulario) naoVerificavel('o conteúdo da tela de consentimento depende de inspeção humana (seção 9.3); com jornada_por_formulario a suíte confere parte dele');
+      const c = ctx.cliente('principal');
+      const id = await ctx.novoConsentimento(c);
+      const { resposta } = await ctx.par(c, id);
+      const ru = (resposta.json as { request_uri?: string }).request_uri ?? falhar(`PAR recusado: ${resumo(resposta)}`);
+      const j = await ctx.jornada(c.clientId, ru, ctx.paciente('principal'), 'recusar');
+      const tela = j.telaDeConsentimento ?? falhar('a jornada não passou por uma tela de consentimento');
+      const nome = c.participante.receiver!.client_name;
+      const finalidade = String(ctx.corpoDeConsentimento().purpose);
+      esperar(tela.includes(nome), `a tela não mostra o nome do receptor como está no registro (${nome})`);
+      esperar(tela.includes(finalidade), 'a tela não mostra a finalidade enviada, sem alteração');
+      r.evidencia(`tela de consentimento com "${nome}" e a finalidade enviada`);
+      r.marcarParcial('escopos em linguagem comum, data de expiração e aviso de confirmação do CPF admitem redação do provedor e pedem inspeção humana');
     },
   },
   {
@@ -135,7 +154,7 @@ export const testesDeConsentimento: Teste[] = [
       esperar(j.location && new URL(j.location).searchParams.get('error') === 'access_denied', `redirecionamento sem access_denied: ${j.location ?? j.pagina_de_erro ?? ''}`);
       const e = estado(await lerComProvedor(ctx, c, id));
       esperar(e.status === 'REJECTED' && e.code === 'PATIENT_REJECTED' && e.via === 'PROVIDER', `estado depois da recusa: ${JSON.stringify(e)}`);
-      r.evidencia('access_denied; REJECTED PATIENT_REJECTED PROVIDER');
+      r.evidencia(`access_denied; REJECTED PATIENT_REJECTED PROVIDER (jornada pela ${j.origem === 'formulario' ? 'página real' : 'interface de controle'})`);
     },
   },
   {
@@ -178,7 +197,9 @@ export const testesDeConsentimento: Teste[] = [
       esperar(patient && typeof patient.cpf === 'string' && typeof patient.fhir_id === 'string', 'leitura com token de paciente sem patient.cpf ou patient.fhir_id');
       esperar(/^[0-9]{11}$/.test(patient.cpf as string), 'patient.cpf não tem 11 dígitos');
       if (p.cpf) esperar(patient.cpf === p.cpf, 'patient.cpf não é o do paciente que se autenticou');
+      else r.marcarParcial('a configuração não traz o CPF do paciente principal para comparar');
       if (p.fhir_id) esperar(patient.fhir_id === p.fhir_id, 'patient.fhir_id não é o do paciente que se autenticou');
+      else r.marcarParcial('a configuração não traz o fhir_id do paciente principal para comparar');
       ctx.segredosVistos.add(patient.cpf as string);
       r.evidencia('patient.cpf e patient.fhir_id iguais aos do paciente de teste');
     },
@@ -234,7 +255,7 @@ export const testesDeConsentimento: Teste[] = [
       esperar(rev.status === 204, `DELETE: ${resumo(rev)}`);
       esperar((await lerComProvedor(ctx, c, a.consentId)).status === 'REVOKED', 'não passou a REVOKED');
       const u = await usarTokens(ctx, c, a.consentId, a.accessToken, a.refreshToken);
-      esperar(u.acesso.status === 401, `token de acesso depois da revogação: ${resumo(u.acesso)}`);
+      tokenRecusado(u.acesso, 'CONSENT_REVOKED');
       erroOAuth(u.refresh, 400, 'invalid_grant');
       r.evidencia('204; REVOKED; token de acesso 401; refresh invalid_grant');
     },
@@ -268,14 +289,16 @@ export const testesDeConsentimento: Teste[] = [
     fase: 'relogio',
     executar: async (ctx, r) => {
       const c = ctx.cliente('principal');
-      const a = await ctx.autorizar(c, { expiracaoMs: ctx.agoraMs() + 10 * 60_000 });
-      await ctx.avancarRelogio(11 * 60 + 60);
+      const a = await ctx.autorizar(c, { expiracaoMs: ctx.agoraMs() + 90_000 });
+      const validade = Number((a.respostaDoToken.json as { expires_in?: unknown }).expires_in ?? 300);
+      esperar(validade > 130, `expires_in ${validade} curto demais para separar a expiração do consentimento da do token`);
+      await ctx.avancarRelogio(120);
       const e = estado(await lerComProvedor(ctx, c, a.consentId));
       esperar(e.status === 'EXPIRED' && e.code === 'MAX_DATE_REACHED' && e.via === 'SYSTEM', `estado depois da expiração: ${JSON.stringify(e)}`);
       const u = await usarTokens(ctx, c, a.consentId, a.accessToken, a.refreshToken);
-      esperar(u.acesso.status === 401, `token de acesso depois da expiração: ${resumo(u.acesso)}`);
+      tokenRecusado(u.acesso, 'CONSENT_EXPIRED');
       erroOAuth(u.refresh, 400, 'invalid_grant');
-      r.evidencia('EXPIRED MAX_DATE_REACHED; token de acesso 401; refresh invalid_grant');
+      r.evidencia(`EXPIRED MAX_DATE_REACHED; token de acesso ainda dentro de expires_in recusado com 401 ${codigoDoErro(u.acesso) ?? ''}; refresh invalid_grant`);
     },
   },
   {
@@ -289,7 +312,7 @@ export const testesDeConsentimento: Teste[] = [
       const e = estado(await lerComProvedor(ctx, c, a.consentId));
       esperar(e.status === 'REVOKED' && e.code === 'PATIENT_REQUEST' && e.via === 'PROVIDER', `estado: ${JSON.stringify(e)}`);
       const u = await usarTokens(ctx, c, a.consentId, a.accessToken, a.refreshToken);
-      esperar(u.acesso.status === 401, `token de acesso: ${resumo(u.acesso)}`);
+      tokenRecusado(u.acesso, 'CONSENT_REVOKED');
       erroOAuth(u.refresh, 400, 'invalid_grant');
       r.evidencia('REVOKED PATIENT_REQUEST PROVIDER; tokens invalidados (revogação feita pela interface de controle, no papel da página; a página em si é CNS-023)');
     },

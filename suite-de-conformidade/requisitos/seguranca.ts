@@ -1,24 +1,25 @@
 // SEG: transporte e chaves (seção 9.3).
 
+import { getCiphers } from 'node:tls';
 import { cabecalhoUnico, type Resposta } from '../http.ts';
 import { esperar, falhar, naoVerificavel } from '../resultado.ts';
 import { codigoDoErro, erroOAuth, resumo } from '../verificacoes.ts';
 import type { Teste } from './tipos.ts';
 
-/** Suítes TLS 1.2 fora da lista da seção 7.5. Nenhuma pode ser aceita nos endpoints entre servidores. */
-const SUITES_PROIBIDAS = [
-  'ECDHE-RSA-AES128-SHA',
-  'ECDHE-RSA-AES256-SHA',
-  'ECDHE-RSA-AES128-SHA256',
-  'ECDHE-RSA-AES256-SHA384',
-  'ECDHE-RSA-CHACHA20-POLY1305',
-  'AES128-GCM-SHA256',
-  'AES256-GCM-SHA384',
-  'AES128-SHA',
-  'AES256-SHA',
-  'DHE-RSA-AES128-GCM-SHA256',
-];
 const SUITES_PERMITIDAS = ['ECDHE-RSA-AES128-GCM-SHA256', 'ECDHE-RSA-AES256-GCM-SHA384', 'ECDHE-ECDSA-AES128-GCM-SHA256', 'ECDHE-ECDSA-AES256-GCM-SHA384'];
+
+/** Todas as suítes TLS 1.2 que o OpenSSL do Node conhece, menos as quatro da seção 7.5. */
+function suitesProibidas(): string[] {
+  return getCiphers()
+    .filter((c) => !c.startsWith('tls_'))
+    .map((c) => c.toUpperCase())
+    .filter((c) => !SUITES_PERMITIDAS.includes(c));
+}
+
+/** Recusa de versão: o servidor manda o alerta protocol_version, ou o cliente vê versão incompatível. */
+function recusaDeVersao(erro: string): boolean {
+  return /PROTOCOL_VERSION|protocol version|unsupported protocol|wrong version number|version too low|ECONNRESET/i.test(erro);
+}
 
 function recusado(r: Resposta | { erro: string }): boolean {
   if ('erro' in r) return true;
@@ -31,15 +32,16 @@ export const testesDeSeguranca: Teste[] = [
     titulo: 'Recusa TLS abaixo de 1.2',
     executar: async (ctx, r) => {
       const c = ctx.cliente('principal');
-      const alvos = [ctx.issuer, ctx.endpoint('token_endpoint'), ctx.fhirBase];
+      const alvos = [ctx.issuer, ctx.endpoint('authorization_endpoint'), ctx.endpoint('token_endpoint'), ctx.endpoint('pushed_authorization_request_endpoint'), ctx.fhirBase, ctx.apiBase];
       for (const url of new Set(alvos.map((u) => new URL(u).origin))) {
         for (const versao of ['TLSv1', 'TLSv1.1'] as const) {
           const a = await ctx.http.aperto(url, { credencial: c.credenciais[0]!, minVersion: versao, maxVersion: versao, ciphers: 'DEFAULT:@SECLEVEL=0' });
-          esperar(!a.ok, `${url} aceitou ${versao} (${a.ok ? a.suite : ''})`);
+          if (a.ok) falhar(`${url} aceitou ${versao} (${a.suite})`);
+          esperar(recusaDeVersao(a.erro), `${url} com ${versao}: o aperto falhou por outro motivo, inconclusivo (${a.erro.slice(0, 120)})`);
         }
         const ok = await ctx.http.aperto(url, { credencial: c.credenciais[0]!, minVersion: 'TLSv1.2' });
         esperar(ok.ok, `${url} não completou o aperto TLS 1.2 ou superior: ${ok.ok ? '' : ok.erro}`);
-        r.evidencia(`${url}: TLS 1.0 e 1.1 recusados, ${ok.ok ? ok.versao : ''} aceito`);
+        r.evidencia(`${url}: TLS 1.0 e 1.1 recusados com alerta de versão, ${ok.ok ? ok.versao : ''} aceito`);
       }
     },
   },
@@ -49,11 +51,15 @@ export const testesDeSeguranca: Teste[] = [
     executar: async (ctx, r) => {
       const c = ctx.cliente('principal');
       const origens = new Set([ctx.endpoint('token_endpoint'), ctx.endpoint('pushed_authorization_request_endpoint'), ctx.fhirBase, ctx.apiBase].map((u) => new URL(u).origin));
+      const proibidas = suitesProibidas();
       for (const origem of origens) {
         const aceitas: string[] = [];
-        for (const suite of SUITES_PROIBIDAS) {
+        let oferecidas = 0;
+        for (const suite of proibidas) {
           const a = await ctx.http.aperto(origem, { credencial: c.credenciais[0]!, maxVersion: 'TLSv1.2', minVersion: 'TLSv1.2', ciphers: `${suite}:@SECLEVEL=0` });
           if (a.ok) aceitas.push(suite);
+          else if (/NO_CIPHERS_AVAILABLE|no ciphers available/i.test(a.erro)) continue;
+          oferecidas++;
         }
         esperar(aceitas.length === 0, `${origem} aceitou no TLS 1.2: ${aceitas.join(', ')}`);
         const negociadas: string[] = [];
@@ -61,7 +67,7 @@ export const testesDeSeguranca: Teste[] = [
           const a = await ctx.http.aperto(origem, { credencial: c.credenciais[0]!, maxVersion: 'TLSv1.2', minVersion: 'TLSv1.2', ciphers: suite });
           if (a.ok) negociadas.push(a.suite);
         }
-        r.evidencia(`${origem}: ${SUITES_PROIBIDAS.length} suítes fora da lista recusadas; TLS 1.2 com ${negociadas.join(', ') || 'nenhuma (só TLS 1.3)'}`);
+        r.evidencia(`${origem}: ${oferecidas} suítes fora da lista oferecidas e recusadas (as que o cliente não consegue oferecer não contam); TLS 1.2 com ${negociadas.join(', ') || 'nenhuma (só TLS 1.3)'}`);
       }
     },
   },

@@ -59,6 +59,8 @@ async function chaveDoReceptor(provedor: Provedor, receptor: Participante, kid: 
   const uri = receptor.receiver!.jwks_uri;
   const agora = Date.now();
   let cache = cacheDeJwks.get(uri);
+  // Validade de 10 minutos: uma chave que o receptor tirou do jwks_uri deixa de valer (seções 7.6 e 7.11).
+  if (cache && agora - cache.buscadoEm >= 10 * 60_000) cache = undefined;
   let chave = cache?.chaves.find((k) => k.kid === kid);
   if (!chave && (!cache || agora - cache.buscadoEm >= 60_000)) {
     try {

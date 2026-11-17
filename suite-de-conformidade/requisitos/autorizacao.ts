@@ -103,7 +103,9 @@ export const testesDeAutorizacao: Teste[] = [
       erroOAuth(sem.resposta, 400, 'invalid_request');
       const plain = await ctx.par(c, consentId, { trocar: { code_challenge_method: 'plain' } });
       erroOAuth(plain.resposta, 400, 'invalid_request');
-      r.evidencia('sem code_challenge e com plain: 400 invalid_request');
+      const semMetodo = await ctx.par(c, consentId, { omitir: ['code_challenge_method'] });
+      erroOAuth(semMetodo.resposta, 400, 'invalid_request');
+      r.evidencia('sem code_challenge, com plain e sem code_challenge_method (que o RFC 7636 trata como plain): 400 invalid_request');
     },
   },
   {
@@ -223,6 +225,7 @@ export const testesDeAutorizacao: Teste[] = [
       esperar(u.searchParams.get('state') === par.state, 'state diferente do enviado');
       esperar(`${u.origin}${u.pathname}` === new URL(c.redirectUri).origin + new URL(c.redirectUri).pathname, 'redirecionou para outro destino');
       r.evidencia(`redirecionamento com ${nomes.join(', ')}`);
+      if (j.origem === 'controle') r.marcarParcial('o redirecionamento veio da interface de controle, e não das páginas reais (configure jornada_por_formulario)');
     },
   },
   {
@@ -238,6 +241,7 @@ export const testesDeAutorizacao: Teste[] = [
       esperar(!cpf || !a.location.includes(cpf), 'o CPF do paciente aparece no redirecionamento');
       esperar(!a.location.includes(a.accessToken), 'o token aparece no redirecionamento');
       r.evidencia('sem token, sem CPF, sem identificador do paciente');
+      if (!ctx.cfg.jornada_por_formulario) r.marcarParcial('o redirecionamento veio da interface de controle, e não das páginas reais (configure jornada_por_formulario)');
     },
   },
   {
@@ -395,6 +399,13 @@ export const testesDeAutorizacao: Teste[] = [
       const pagina = await abrirAutorizacao(ctx, ctx.urlDeAutorizacao(c.clientId, par.requestUri));
       esperar(pagina.status === 200, `página de autorização respondeu ${pagina.status}`);
       r.evidencia(`página de login servida por ${auth.origin}; concessão password recusada`);
+      if (ctx.cfg.jornada_por_formulario) {
+        const outra = await parValido(ctx, c);
+        const j = await ctx.jornada(c.clientId, outra.requestUri, ctx.paciente('principal'), 'recusar');
+        const fora = j.saltos.filter((s) => dominio(new URL(s.url).hostname) !== dominio(issuer.hostname));
+        esperar(fora.length === 0, `a jornada passou por fora do domínio do provedor: ${fora.map((s) => s.url).join(', ')}`);
+        r.evidencia(`login e consentimento: ${j.saltos.length} requisições, todas em ${dominio(issuer.hostname)}`);
+      }
       r.marcarParcial('a origem real das páginas de login e de consentimento e a ausência de outra interface de credenciais pedem inspeção humana');
     },
   },
@@ -405,9 +416,13 @@ export const testesDeAutorizacao: Teste[] = [
       const c = ctx.cliente('principal');
       const par = await parValido(ctx, c);
       const j = await ctx.jornada(c.clientId, par.requestUri, ctx.paciente('principal'));
-      esperar(j.status !== 307, 'redirecionamento com 307');
+      esperar(j.location, `a jornada não terminou no receptor: ${j.pagina_de_erro ?? j.status}`);
+      esperar(j.status !== 307, 'redirecionamento ao receptor com 307');
       esperar(j.status >= 300 && j.status < 400, `status do redirecionamento: ${j.status}`);
-      r.evidencia(`redirecionamento ao receptor com ${j.status}`);
+      const com307 = j.saltos.filter((s) => s.status === 307);
+      esperar(com307.length === 0, `307 em ${com307.map((s) => `${s.metodo} ${s.url}`).join(', ')}`);
+      r.evidencia(`redirecionamento ao receptor com ${j.status}; ${j.saltos.length} requisições na jornada: ${j.saltos.map((s) => `${s.metodo} ${s.status}`).join(', ')}`);
+      if (j.origem === 'controle') r.marcarParcial('os redirecionamentos vieram da interface de controle; os das páginas de login e de consentimento não foram vistos (configure jornada_por_formulario)');
     },
   },
   {

@@ -6,6 +6,7 @@ import { cabecalhoUnico, type Resposta } from '../http.ts';
 import { esperar, falhar, naoVerificavel } from '../resultado.ts';
 import { codigoDoErro, dentroDaBase, erroApi, linkProximo, recursos, resumo, SISTEMA_DE_ERROS, sucesso, todasAsPaginas, type Json } from '../verificacoes.ts';
 import { cenario, corpoDeAgendamento, criarAgendamento, janela } from './apoio.ts';
+import { tokenRecusado } from './consentimento.ts';
 import type { Teste } from './tipos.ts';
 
 const BASE = 'https://fhir-brasil.dev.br/ig/StructureDefinition/';
@@ -95,6 +96,61 @@ export function conferirPerfil(r: R): string[] {
   return e;
 }
 
+/** Códigos da seção 6.3: status HTTP permitidos e issue.code de cada um. */
+export const CODIGOS_DE_ERRO: Record<string, Array<[number, string]>> = {
+  TOKEN_MISSING: [[401, 'login']],
+  TOKEN_INVALID: [[401, 'login']],
+  TOKEN_CERTIFICATE_MISMATCH: [[401, 'security']],
+  CONSENT_REVOKED: [[401, 'security']],
+  CONSENT_EXPIRED: [[401, 'expired']],
+  SCOPE_INSUFFICIENT: [[403, 'forbidden']],
+  PATIENT_NOT_IN_CONSENT: [[403, 'forbidden'], [422, 'business-rule']],
+  RECEIVER_NOT_ALLOWED: [[403, 'forbidden']],
+  REGISTRY_EXPIRED: [[403, 'forbidden']],
+  CLIENT_CERTIFICATE_REQUIRED: [[401, 'security']],
+  INVALID_REQUEST: [[400, 'invalid']],
+  INTERACTION_ID_MISSING: [[400, 'required']],
+  UNSUPPORTED_SEARCH_PARAMETER: [[400, 'not-supported']],
+  SEARCH_WINDOW_TOO_LARGE: [[400, 'too-costly']],
+  IF_NONE_EXIST_REQUIRED: [[400, 'required']],
+  IF_MATCH_REQUIRED: [[400, 'required']],
+  RESOURCE_NOT_FOUND: [[404, 'not-found']],
+  CONSENT_NOT_FOUND: [[404, 'not-found']],
+  METHOD_NOT_ALLOWED: [[405, 'not-supported']],
+  NOT_ACCEPTABLE: [[406, 'not-supported']],
+  UNSUPPORTED_MEDIA_TYPE: [[415, 'not-supported']],
+  CONSENT_INVALID_SCOPES: [[422, 'business-rule']],
+  CONSENT_INVALID_EXPIRATION: [[422, 'business-rule']],
+  CONSENT_INVALID_STATE: [[422, 'business-rule']],
+  EXAM_NOT_AVAILABLE_AT_LOCATION: [[422, 'business-rule']],
+  SLOT_UNAVAILABLE: [[409, 'conflict']],
+  VERSION_CONFLICT: [[412, 'conflict']],
+  APPOINTMENT_NOT_MODIFIABLE: [[422, 'business-rule']],
+  APPOINTMENT_FIELD_NOT_MODIFIABLE: [[422, 'business-rule']],
+  INVALID_RESOURCE: [[422, 'invariant']],
+  RATE_LIMITED: [[429, 'throttled']],
+  INTERNAL_ERROR: [[500, 'exception']],
+  PROVIDER_UNAVAILABLE: [[503, 'transient']],
+  UPSTREAM_TIMEOUT: [[504, 'timeout']],
+};
+
+/** Problemas de um erro da API contra a tabela da seção 6.3. */
+export function problemasDoErro(status: number, corpo: unknown): string | undefined {
+  const oo = corpo as { resourceType?: string; issue?: Array<{ severity?: string; code?: string; details?: { coding?: Array<{ system?: string; code?: string }> } }> } | undefined;
+  if (oo?.resourceType !== 'OperationOutcome' || !oo.issue?.length) return 'sem OperationOutcome';
+  for (const i of oo.issue) {
+    if (i.severity !== 'error') return `severity ${String(i.severity)}`;
+    const codigos = (i.details?.coding ?? []).filter((c) => c.system === SISTEMA_DE_ERROS);
+    if (codigos.length !== 1) return `${codigos.length} códigos ${SISTEMA_DE_ERROS}`;
+    const regras = CODIGOS_DE_ERRO[String(codigos[0]!.code)];
+    if (!regras) return `código desconhecido ${String(codigos[0]!.code)}`;
+    const regra = regras.find(([s]) => s === status);
+    if (!regra) return `${String(codigos[0]!.code)} com status ${status}`;
+    if (i.code !== regra[1]) return `${String(codigos[0]!.code)} com issue.code ${String(i.code)} (esperado ${regra[1]})`;
+  }
+  return undefined;
+}
+
 function trocaDaApi(ctx: Contexto, url: string): boolean {
   return url.startsWith(`${ctx.fhirBase}/`) || url === ctx.fhirBase || url.startsWith(`${ctx.apiBase}/`);
 }
@@ -162,11 +218,15 @@ export const testesDeApi: Teste[] = [
       const caminho = `Patient/${ctx.paciente('principal').fhir_id ?? 'x'}`;
       const revogado = await ctx.autorizar(c);
       await ctx.revogar(c, revogado.consentId);
-      erroApi(await ctx.fhir(revogado.accessToken, caminho), 401, 'CONSENT_REVOKED');
-      const curto = await ctx.autorizar(c, { expiracaoMs: ctx.agoraMs() + 5 * 60_000 });
-      await ctx.avancarRelogio(6 * 60);
-      erroApi(await ctx.fhir(curto.accessToken, caminho), 401, 'CONSENT_EXPIRED');
-      r.evidencia('REVOKED: 401 CONSENT_REVOKED; EXPIRED: 401 CONSENT_EXPIRED');
+      const rv = await ctx.fhir(revogado.accessToken, caminho);
+      tokenRecusado(rv, 'CONSENT_REVOKED');
+      const curto = await ctx.autorizar(c, { expiracaoMs: ctx.agoraMs() + 90_000 });
+      const validade = Number((curto.respostaDoToken.json as { expires_in?: unknown }).expires_in ?? 300);
+      esperar(validade > 130, `expires_in ${validade} curto demais para o teste`);
+      await ctx.avancarRelogio(120);
+      const ex = await ctx.fhir(curto.accessToken, caminho);
+      tokenRecusado(ex, 'CONSENT_EXPIRED');
+      r.evidencia(`REVOKED: 401 ${codigoDoErro(rv) ?? ''}; EXPIRED, com o token ainda dentro de expires_in: 401 ${codigoDoErro(ex) ?? ''}`);
     },
   },
   {
@@ -277,12 +337,8 @@ export const testesDeApi: Teste[] = [
       const token = await ctx.tokenDeProvedor(ctx.cliente('principal'), 'locations.read');
       erroApi(await ctx.fhir(token, 'Location/unidade-que-nao-existe'), 404, 'RESOURCE_NOT_FOUND');
       const erros = ctx.http.historico.filter((t) => trocaDaApi(ctx, t.url) && t.status >= 400);
-      const ruins = erros.filter((t) => {
-        const oo = t.json as { resourceType?: string; issue?: Array<{ severity?: string; details?: { coding?: Array<{ system?: string }> } }> } | undefined;
-        if (oo?.resourceType !== 'OperationOutcome' || !oo.issue?.length) return true;
-        return oo.issue.some((i) => i.severity !== 'error' || (i.details?.coding ?? []).filter((c) => c.system === SISTEMA_DE_ERROS).length !== 1);
-      });
-      esperar(ruins.length === 0, `${ruins.length} de ${erros.length} erros sem OperationOutcome do protocolo (por exemplo ${ruins[0]?.metodo} ${ruins[0]?.url} ${ruins[0]?.status})`);
+      const ruins = erros.map((t) => ({ t, problema: problemasDoErro(t.status, t.json) })).filter((x) => x.problema);
+      esperar(ruins.length === 0, `${ruins.length} de ${erros.length} erros fora da tabela da seção 6.3 (por exemplo ${ruins[0]?.t.metodo} ${ruins[0]?.t.url.replace(/\?.*$/, '')} ${ruins[0]?.t.status}: ${ruins[0]?.problema})`);
       const codigos = [...new Set(erros.map((t) => codigoDoErro({ json: t.json } as Resposta)))].filter(Boolean);
       r.evidencia(`${erros.length} respostas de erro da API conferidas; códigos vistos: ${codigos.join(', ')}`);
     },

@@ -59,6 +59,12 @@ export interface ConfiguracaoDaSuite {
   };
   catalogo?: { item_para_retirar?: string };
   controle_de_teste?: { url: string; token: string };
+  /**
+   * Jornada do paciente pelas páginas reais do provedor, quando login e
+   * consentimento são formulários HTML simples (sem JavaScript). Tem
+   * precedência sobre a interface de controle para concluir a jornada.
+   */
+  jornada_por_formulario?: { campo_usuario: string; campo_senha: string; campo_decisao: string; valor_aprovar: string; valor_recusar: string };
 }
 
 export function lerConfiguracaoDaSuite(caminho: string): ConfiguracaoDaSuite {

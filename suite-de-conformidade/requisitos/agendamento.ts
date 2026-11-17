@@ -61,13 +61,24 @@ function linkDePagamento(recurso: Json): string | undefined {
   return ext.length === 1 ? (ext[0]!.valueUrl as string | undefined) : undefined;
 }
 
+/** Sufixos públicos de segundo nível mais comuns (com.br, gov.br, co.uk...), sem depender da lista pública de sufixos. */
+const SUFIXO_DE_SEGUNDO_NIVEL = /^(com|net|org|gov|edu|med|ind|srv|art|adv|eng|inf|ong|mil|co|ac)\.[a-z]{2}$/;
+
+/** Domínio registrável aproximado: host inteiro para IP e localhost; últimos dois rótulos, ou três sob sufixo de segundo nível. */
+export function dominioRegistravel(host: string): string {
+  if (/^[\d.]+$/.test(host) || host.includes(':')) return host;
+  const rotulos = host.split('.');
+  if (rotulos.length <= 2) return host;
+  const dois = rotulos.slice(-2).join('.');
+  return SUFIXO_DE_SEGUNDO_NIVEL.test(dois) ? rotulos.slice(-3).join('.') : dois;
+}
+
 function dominioDoProvedor(ctx: Contexto, url: string): boolean {
   const host = new URL(url).hostname;
   const p = ctx.provedor.provider!;
   return [p.issuer, p.fhir_base_url, p.api_base_url, p.consent_management_uri].some((u) => {
     const h = new URL(u).hostname;
-    const base = h.split('.').length >= 3 ? h.split('.').slice(1).join('.') : h;
-    return host === h || host === base || host.endsWith(`.${base}`);
+    return host === h || dominioRegistravel(host) === dominioRegistravel(h);
   });
 }
 

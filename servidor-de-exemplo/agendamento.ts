@@ -160,6 +160,13 @@ function validarAgendamento(provedor: Provedor, c: Consentimento, corpo: Json, c
   const contidos = (corpo.contained as Json[] | undefined) ?? [];
   const pacientes = participantes.filter((p) => p.actor?.type === 'Patient');
   const conferirPaciente = !provedor.violacao('paciente-do-agendamento-livre');
+  for (const p of participantes) {
+    const ref = p.actor?.reference ?? '';
+    const pareceDePaciente = ref.startsWith('Patient/') || ref.startsWith(`${base}/Patient/`) || p.actor?.identifier?.system === SISTEMA_CPF;
+    if (conferirPaciente && pareceDePaciente && !referenciaDoPaciente(p.actor, c, base)) {
+      throw new ErroDeApi(422, 'PATIENT_NOT_IN_CONSENT', 'business-rule', 'O agendamento referencia paciente diferente do paciente do consentimento.', { expressao: ['Appointment.participant.actor'] });
+    }
+  }
   for (const p of conferirPaciente ? pacientes : []) {
     if (!referenciaDoPaciente(p.actor, c, base)) {
       throw new ErroDeApi(422, 'PATIENT_NOT_IN_CONSENT', 'business-rule', 'O agendamento referencia paciente diferente do paciente do consentimento.', { expressao: ['Appointment.participant.actor'] });
@@ -211,6 +218,7 @@ function validarAgendamento(provedor: Provedor, c: Consentimento, corpo: Json, c
   }
   for (const id of ids) if (!apontados.has(id) && !semPedido) throw invalido('Todo pedido contido precisa de um basedOn que aponte para ele.', 'Appointment.contained');
 
+  if (participantes.some((p) => !p.actor?.type)) throw invalido('actor.type é obrigatório em todo participante.', 'Appointment.participant.actor.type');
   if (pacientes.length !== 1) throw invalido('O agendamento precisa de exatamente um participante com actor.type Patient.', 'Appointment.participant');
   const unidades = participantes.filter((p) => p.actor?.type === 'Location');
   if (unidades.length !== 1 || !unidades[0]!.actor?.reference?.startsWith('Location/')) {

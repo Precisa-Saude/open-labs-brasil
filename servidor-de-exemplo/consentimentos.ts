@@ -92,7 +92,13 @@ export async function tratarConsentimentos(provedor: Provedor, req: IncomingMess
     const resto = url.pathname.slice(base.length);
     const m = /^\/consents(?:\/([^/]+))?$/.exec(resto);
     if (!m) throw new ErroDeApi(404, 'RESOURCE_NOT_FOUND', 'not-found', 'Endpoint inexistente.');
-    const id = m[1] ? decodeURIComponent(m[1]) : undefined;
+    let id: string | undefined;
+    try {
+      id = m[1] ? decodeURIComponent(m[1]) : undefined;
+    } catch {
+      autenticarRecurso(provedor, req, url);
+      throw invalida('consent_id com codificação inválida.');
+    }
 
     if (!id) {
       if (req.method !== 'POST') throw new ErroDeApi(405, 'METHOD_NOT_ALLOWED', 'not-supported', 'Método não previsto.', { cabecalhos: { Allow: 'POST' } });

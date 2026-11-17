@@ -30,7 +30,7 @@ import {
   type DocumentoDoRegistro,
   type Participante,
 } from '../comum/registro.ts';
-import { FIXTURAS, PACIENTES, SISTEMA_PRODUTOS } from '../servidor-de-exemplo/dados.ts';
+import { FIXTURAS, PACIENTES, SENHA_DE_TESTE, SISTEMA_PRODUTOS } from '../servidor-de-exemplo/dados.ts';
 
 const TODOS_OS_ESCOPOS = ['catalog.read', 'locations.read', 'schedule.read', 'consent.manage', 'appointment.write', 'results.read', 'consent.read'] as const;
 
@@ -290,6 +290,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
     pacientes: {
       principal: {
         usuario: ana.usuario,
+        senha: SENHA_DE_TESTE,
         cpf: ana.cpf,
         fhir_id: ana.id,
         laudos_nao_liberados: FIXTURAS.laudosNaoLiberados,
@@ -297,8 +298,8 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
         laudo_para_retificar: FIXTURAS.laudoParaRetificar,
         agendamento_de_outro_canal: FIXTURAS.agendamentoDeOutroCanal,
       },
-      outro: { usuario: bruno.usuario, cpf: bruno.cpf, fhir_id: bruno.id },
-      sem_cpf: { usuario: 'carla' },
+      outro: { usuario: bruno.usuario, senha: SENHA_DE_TESTE, cpf: bruno.cpf, fhir_id: bruno.id },
+      sem_cpf: { usuario: 'carla', senha: SENHA_DE_TESTE },
     },
     agenda: {
       unidade: `Location/${FIXTURAS.unidadeDosTestes}`,
@@ -309,6 +310,7 @@ export async function gerarAmbiente(o: OpcoesDoAmbiente): Promise<void> {
     },
     catalogo: { item_para_retirar: 'mucoproteinas', sistema_proprio: SISTEMA_PRODUTOS },
     controle_de_teste: { url: `http://127.0.0.1:${o.portaControle}`, token: tokenDeControle },
+    jornada_por_formulario: { campo_usuario: 'usuario', campo_senha: 'senha', campo_decisao: 'decisao', valor_aprovar: 'aprovar', valor_recusar: 'recusar' },
   }, null, 2));
   writeFileSync(join(dir, 'LEIA-ME.txt'), [
     'Ambiente local de teste do Open Labs Brasil, gerado por ambiente-local/gerar.ts.',
