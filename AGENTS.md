@@ -97,8 +97,9 @@ anything written to the repo.
 - The landing page reads the spec version and date from
   `especificacao/00-indice.md` and the conformance numbers from
   `docs/cobertura-de-requisitos.md` at build time
-  (`site/src/dados/situacao.ts`). Never type those numbers into a
-  component. If either sentence changes shape, the build fails on purpose.
+  (`site/src/dados/situacao.ts`), and the request and response examples
+  from `especificacao/05-api.md` (`site/src/dados/exemplos.ts`). Never type
+  those numbers or snippets into a component. If either sentence changes shape, the build fails on purpose.
 - Every claim on the page comes from the spec, the README or
   `docs/apresentacao-para-laboratorios.md`. When the spec changes what the
   page says, update the page in the same PR.

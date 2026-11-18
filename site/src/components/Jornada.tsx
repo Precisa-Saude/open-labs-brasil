@@ -70,9 +70,9 @@ export function Jornada() {
         outro certificado.
       </p>
       <p className={`col-span-full mb-8 max-w-[60ch] md:col-span-6 ${TIPO.abertura}`}>
-        Depois da aprovação, o laboratório informa ao aplicativo o CPF de quem se autenticou, e o
-        aplicativo revoga o consentimento se esse CPF não for o do seu usuário. Antes disso o CPF
-        não circula, ao contrário do Open Finance Brasil, onde ele vai junto com o pedido de acesso.
+        O pedido de acesso não leva o CPF do paciente. Depois da aprovação, o laboratório informa ao
+        aplicativo o CPF de quem se autenticou, e o aplicativo revoga o consentimento se esse CPF
+        não for o do seu usuário.
       </p>
 
       <div className={`col-span-full hidden p-6 lg:block ${SUPERFICIE}`}>

@@ -38,7 +38,7 @@ const FERRAMENTAS = [
 
 export function Ferramentas() {
   return (
-    <SecaoEmGrade className={GRADE_INTERNA} id="ferramentas" tom="muted">
+    <SecaoEmGrade className={GRADE_INTERNA} id="ferramentas">
       <h2 className={`col-span-full ${TIPO.tituloDeSecao}`}>Ferramentas para testar</h2>
       <p className={`col-span-full mb-8 max-w-[56ch] ${TIPO.abertura}`}>
         Para ver o protocolo funcionando antes de escrever código, o repositório tem um laboratório

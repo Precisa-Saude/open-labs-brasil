@@ -26,7 +26,7 @@ const CONTROLES: readonly Controle[] = [
   },
   {
     descricao:
-      'O consentimento vale por até 12 meses e não se renova sozinho, enquanto o Open Finance Brasil admite prazo indeterminado.',
+      'O consentimento vale por até 12 meses e não se renova sem uma nova aprovação do paciente.',
     icone: CalendarClock,
     titulo: 'Prazo',
   },
@@ -44,7 +44,7 @@ const CONTROLES: readonly Controle[] = [
   },
   {
     descricao:
-      'No piloto basta um certificado TLS comum, conferido por hash. Para produção a ideia é usar ICP-Brasil, como o Open Finance Brasil, mas o perfil do certificado ainda não foi definido.',
+      'No piloto basta um certificado TLS comum, conferido por hash. Para produção a ideia é usar ICP-Brasil, mas o perfil do certificado ainda não foi definido.',
     icone: KeyRound,
     titulo: 'Certificados',
   },
@@ -56,6 +56,7 @@ export function Controles() {
       className={GRADE_INTERNA}
       fundo={{ cx: 1260, cy: 530, opacidade: 0.72 }}
       id="controles"
+      tom="muted"
     >
       <h2 className={`col-span-full ${TIPO.tituloDeSecao}`}>Base legal e controles</h2>
       <p className={`col-span-full mb-8 max-w-[60ch] md:col-span-7 ${TIPO.abertura}`}>

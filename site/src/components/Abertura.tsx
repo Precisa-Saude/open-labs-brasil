@@ -9,12 +9,7 @@ import { estiloDaGrade } from './marca/SecaoEmGrade';
 
 const COMANDO = `git clone ${REPOSITORIO}`;
 
-const SELOS = [
-  'FAPI 2.0',
-  'FHIR R4',
-  'Consentimento do Open Finance Brasil',
-  'CC BY 4.0 e Apache-2.0',
-];
+const SELOS = ['FAPI 2.0', 'FHIR R4', 'LOINC', 'CC BY 4.0 e Apache-2.0'];
 
 // Três colunas cada: os quatro selos ocupam exatamente as 12 colunas úteis.
 const COLUNAS_DOS_SELOS = [
@@ -49,14 +44,11 @@ export function Abertura() {
             Protocolo aberto · versão {ESPECIFICACAO.versao}, em piloto
           </p>
           <h1 className={`max-w-[19ch] ${TIPO.titulo}`}>
-            Como o laboratório atende o aplicativo que o{' '}
-            <em className="brand-highlight">paciente&nbsp;escolheu</em>
+            Dados do laboratório sob <em className="brand-highlight">controle do paciente</em>
           </h1>
           <p className="mt-6 mb-8 max-w-[46ch] text-lg leading-relaxed">
-            O aplicativo consulta catálogo, unidades e horários livres sem envolver o paciente. Para
-            agendar um exame ou receber resultados, ele precisa que o paciente aprove o acesso na
-            página do próprio laboratório, depois de entrar com a senha que já usa lá, e o paciente
-            pode revogar pelo aplicativo ou pelo laboratório.
+            O aplicativo agenda exames e recebe resultados depois que o paciente aprova o acesso na
+            página do próprio laboratório.
           </p>
 
           <a

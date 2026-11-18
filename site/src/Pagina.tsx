@@ -4,6 +4,7 @@ import { Abertura } from './components/Abertura';
 import { Cabecalho } from './components/Cabecalho';
 import { Controles } from './components/Controles';
 import { Escopos } from './components/Escopos';
+import { Exemplos } from './components/Exemplos';
 import { Ferramentas } from './components/Ferramentas';
 import { Jornada } from './components/Jornada';
 import { OQueOLaboratorioConstroi } from './components/OQueOLaboratorioConstroi';
@@ -19,6 +20,7 @@ export function Pagina() {
         <Jornada />
         <OQueOLaboratorioConstroi />
         <Escopos />
+        <Exemplos />
         <Controles />
         <Ferramentas />
         <Situacao />
