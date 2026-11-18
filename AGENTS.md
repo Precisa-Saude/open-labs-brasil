@@ -146,9 +146,9 @@ anything written to the repo.
   site's dev server uses port 4322 (the fhir-brasil site uses 4321).
 - **No release or publish workflows.** Nothing here is published to npm; the
   spec version lives in `CHANGELOG.md` and the chapters. The site is
-  published to GitHub Pages by `.github/workflows/site.yml`, at
-  https://precisa-saude.github.io/open-labs-brasil/, so `vite build` uses
-  the base path `/open-labs-brasil/`.
+  published to Cloudflare Pages (project `open-labs-brasil`, on
+  `pages.dev`) by `.github/workflows/site.yml`, like datasus-viz. The
+  workflow creates the project on its first run if it does not exist.
 - **No coverage floor.** The conformance suite and the deliberate violations
   are the evidence that the tools test what they claim.
 - **Files over 400 lines** are listed in `eslint.config.js`. They predate

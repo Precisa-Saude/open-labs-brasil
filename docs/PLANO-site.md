@@ -19,7 +19,7 @@ Uma página única que explica o protocolo para engenharia e segurança de labor
 
 ## Fora desta etapa
 
-- Domínio próprio. Por enquanto o site fica no GitHub Pages, em https://precisa-saude.github.io/open-labs-brasil/, publicado por `.github/workflows/site.yml` a cada mudança na `main` que toque o site ou os arquivos de onde ele lê números.
+- Domínio próprio. Por enquanto o site fica no Cloudflare Pages, no projeto `open-labs-brasil` em `pages.dev`, como o datasus-viz, publicado por `.github/workflows/site.yml` a cada mudança na `main` que toque o site ou os arquivos de onde ele lê números.
 - Imagem de compartilhamento (Open Graph) e ícones em PNG. Só há o `favicon.svg`.
 - Versão em inglês.
 - Revisão de desenho, que é do mantenedor, no navegador.
@@ -27,6 +27,6 @@ Uma página única que explica o protocolo para engenharia e segurança de labor
 ## Próximos passos
 
 1. Revisão da página no navegador.
-2. Conferir a primeira publicação no GitHub Pages depois do merge.
+2. Conferir a primeira publicação depois do merge e o endereço que o Cloudflare deu ao projeto.
 3. Imagem de compartilhamento.
 4. Domínio próprio, quando houver.

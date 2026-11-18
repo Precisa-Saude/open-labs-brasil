@@ -1,9 +1,10 @@
 name: Site
 
-# Publica `site/` no GitHub Pages, em
-# https://precisa-saude.github.io/open-labs-brasil/. A página lê a versão da
-# especificação e o resultado da suíte de arquivos fora de `site/`, por isso
-# esses arquivos também disparam a publicação.
+# Publica `site/` no Cloudflare Pages, no projeto `open-labs-brasil`, como o
+# datasus-viz. A página lê a versão da especificação e o resultado da suíte de
+# arquivos fora de `site/`, por isso esses arquivos também disparam a
+# publicação. CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID são segredos da
+# organização.
 
 on:
   push:
@@ -21,13 +22,16 @@ permissions:
 
 # Uma publicação por vez, sem cancelar a que já começou.
 concurrency:
-  group: pages
+  group: site
   cancel-in-progress: false
 
+env:
+  PROJETO: open-labs-brasil
+
 jobs:
-  compilar:
+  publicar:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -39,21 +43,37 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: site/dist
 
-  publicar:
-    needs: compilar
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.publicacao.outputs.page_url }}
-    steps:
-      - id: publicacao
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      # O `pages deploy` não cria o projeto em ambiente não interativo. Na
+      # primeira publicação ele é criado aqui; nas seguintes, a consulta acha
+      # o projeto e nada muda. Qualquer resposta que não seja 200 nem 404
+      # interrompe a publicação.
+      - name: Garantir o projeto no Cloudflare Pages
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
+          status=$(curl -s -o /tmp/projeto.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "${api}/${PROJETO}")
+          if [ "$status" = "404" ]; then
+            status=$(curl -s -o /tmp/projeto.json -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "{\"name\":\"${PROJETO}\",\"production_branch\":\"main\"}" "${api}")
+          fi
+          if [ "$status" != "200" ]; then
+            echo "Cloudflare respondeu ${status}:"
+            cat /tmp/projeto.json
+            exit 1
+          fi
+          subdominio=$(jq -r '.result.subdomain' /tmp/projeto.json)
+          echo "Endereço: https://${subdominio}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: npm
+          command: pages deploy site/dist --project-name=${{ env.PROJETO }} --branch=main --commit-hash=${{ github.sha }} --commit-message="${{ github.sha }}"

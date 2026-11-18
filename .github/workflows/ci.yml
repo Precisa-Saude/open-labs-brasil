@@ -7,7 +7,7 @@ name: CI
 # typecheck, format:check, build e test. O script adicional, `conferir`,
 # roda a suíte de conformidade contra o servidor de exemplo e confere os
 # links dos arquivos Markdown. Não há release nem pacote no npm. O site é
-# publicado no GitHub Pages por `site.yml`.
+# publicado no Cloudflare Pages por `site.yml`.
 
 on:
   push:
