@@ -38,12 +38,13 @@ ambiente-local/         test PKI and signed local registry generator; `pnpm demo
                         (example server plus hosting, for a real app to connect as receiver F)
 comum/                  CPF, registry verification (V1 to V14), version negotiation
 ferramentas/            Markdown link check, coverage table generator
+site/                   landing page (Vite, React, Tailwind, @precisa-saude/ui), `pnpm site`
 ```
 
 ## Commit scopes
 
 Valid scopes: `especificacao`, `registro`, `servidor`, `suite`, `ambiente`,
-`ferramentas`, `docs`, `ci`, `deps`, `lint`, `config`.
+`ferramentas`, `docs`, `ci`, `deps`, `lint`, `config`, `site`.
 
 ## Language
 
@@ -51,7 +52,9 @@ Everything in the repo is Brazilian Portuguese with full accents: spec text,
 docs, code identifiers, comments, test names, commit descriptions, PR titles
 and bodies. Protocol identifiers stay in English (scope names, paths, JSON
 fields, error codes), as the spec says in chapter 1, section 1.3. This file
-is the exception. No em or en dashes in anything written to the repo.
+is the exception. In `site/`, props of shared components from
+`@precisa-saude/ui` keep their English names. No em or en dashes in
+anything written to the repo.
 
 ## Changing the specification
 
@@ -89,6 +92,19 @@ is the exception. No em or en dashes in anything written to the repo.
   SVG. When the `.md` changes, rebuild the PDF and confirm it is still two
   A4 pages (`pdfinfo`).
 
+## Site
+
+- The landing page reads the spec version and date from
+  `especificacao/00-indice.md` and the conformance numbers from
+  `docs/cobertura-de-requisitos.md` at build time
+  (`site/src/dados/situacao.ts`). Never type those numbers into a
+  component. If either sentence changes shape, the build fails on purpose.
+- Every claim on the page comes from the spec, the README or
+  `docs/apresentacao-para-laboratorios.md`. When the spec changes what the
+  page says, update the page in the same PR.
+- The visual language is the fhir-brasil site's: `components/marca/` and
+  `lib/tipografia.ts` are ports of it. Change them there first.
+
 ## Tests and checks
 
 - `pnpm verificar` runs lint, format check, typecheck, tests, the
@@ -108,6 +124,10 @@ is the exception. No em or en dashes in anything written to the repo.
   established JOSE library over hand-written signing and verification, and
   the registry schema needs a JSON Schema 2020-12 validator. Anything else
   needs explicit approval.
+- `site/` is a separate workspace package. Its dependencies (React, Vite,
+  Tailwind, `@precisa-saude/ui`, `@precisa-saude/themes`, `lucide-react`)
+  serve only the landing page and never reach the tools' runtime. New ones
+  still need explicit approval.
 - Node runs the TypeScript directly (type stripping, Node 22.18 or newer).
   There is no build step; `pnpm build` only prints that.
 
@@ -119,11 +139,16 @@ is the exception. No em or en dashes in anything written to the repo.
 - **TypeScript 6.0, not the ecosystem's 5.7 and not 7.0.** The code uses
   `erasableSyntaxOnly` (5.8+). typescript-eslint supports TypeScript below
   6.1 only, so 7.0 breaks lint.
-- **No turbo, no workspace.** One `package.json` at the root.
-- **No `worktree-cli`.** The fixed ports above would collide anyway, and
-  there are no dev servers to allocate.
-- **No release, publish or site workflows.** Nothing here is published; the
-  spec version lives in `CHANGELOG.md` and the chapters.
+- **No turbo.** The root `package.json` holds the tools; the only workspace
+  package is `site/`, and the root `build` and `typecheck` scripts reach it
+  through `pnpm --filter`.
+- **No `worktree-cli`.** The fixed ports above would collide anyway. The
+  site's dev server uses port 4322 (the fhir-brasil site uses 4321).
+- **No release or publish workflows.** Nothing here is published to npm; the
+  spec version lives in `CHANGELOG.md` and the chapters. The site is
+  published to GitHub Pages by `.github/workflows/site.yml`, at
+  https://precisa-saude.github.io/open-labs-brasil/, so `vite build` uses
+  the base path `/open-labs-brasil/`.
 - **No coverage floor.** The conformance suite and the deliberate violations
   are the evidence that the tools test what they claim.
 - **Files over 400 lines** are listed in `eslint.config.js`. They predate

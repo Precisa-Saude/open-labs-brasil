@@ -3,3 +3,4 @@ ambiente-local/gerado/
 relatorios/
 *.log
 .DS_Store
+site/dist/

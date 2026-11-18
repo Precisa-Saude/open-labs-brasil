@@ -4,7 +4,7 @@ export default [
   ...base,
   {
     // Gerados pelo ambiente local e pela suíte, fora do controle de versão.
-    ignores: ['ambiente-local/gerado/**', 'relatorios/**'],
+    ignores: ['ambiente-local/gerado/**', 'relatorios/**', 'site/dist/**'],
   },
   {
     // Test files are excluded from package tsconfigs (to keep tsc --noEmit

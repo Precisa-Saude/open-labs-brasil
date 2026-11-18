@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "ambiente:gerar": "node ambiente-local/gerar.ts --se-faltar",
-    "build": "node -e \"console.log('Nada a compilar: o Node executa o TypeScript direto.')\"",
+    "build": "pnpm --filter open-labs-brasil-site build",
     "conferir": "pnpm conformidade:local && pnpm docs:links",
     "conformidade:local": "node suite-de-conformidade/local.ts",
     "demonstracao": "node ambiente-local/demonstracao.ts",
@@ -18,9 +18,10 @@
     "lint": "eslint .",
     "prepare": "husky",
     "servidor": "node servidor-de-exemplo/principal.ts --config ambiente-local/gerado/servidor.config.json",
+    "site": "pnpm --filter open-labs-brasil-site dev",
     "suite": "node suite-de-conformidade/principal.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p .",
+    "typecheck": "tsc -p . && pnpm --filter open-labs-brasil-site typecheck",
     "verificar": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm conferir"
   },
   "lint-staged": {

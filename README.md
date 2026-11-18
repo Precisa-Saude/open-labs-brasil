@@ -58,6 +58,7 @@ ambiente-local/         PKI de teste e registro local assinado (código)
 comum/                  código usado pelos três acima
 ferramentas/            conferência de links e tabela de cobertura (código)
 Dockerfile              imagem do servidor de exemplo, para uso local
+site/                   página de apresentação do protocolo (pnpm site)
 ```
 
 Comece por [especificacao/00-indice.md](especificacao/00-indice.md). Quem vai avaliar o custo de implementar em um laboratório encontra ali uma lista do que precisa ser construído.

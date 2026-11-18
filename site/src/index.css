@@ -1,0 +1,177 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@precisa-saude/themes';
+@config '../tailwind.config.js';
+
+@custom-variant 3xl (@media (min-width: 1440px));
+
+/* Margem e Pausa, as fontes da marca, servidas pela landing da Precisa com
+   CORS aberto. Os arquivos são licenciados e não entram neste repositório,
+   que é público. */
+@font-face {
+  font-family: 'Margem';
+  src: url('https://www.precisa-saude.com.br/fonts/MargemVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Pausa';
+  src: url('https://www.precisa-saude.com.br/fonts/PausaVariable-Roman.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Pausa';
+  src: url('https://www.precisa-saude.com.br/fonts/PausaVariable-Italic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --font-sans: 'Margem', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-serif: 'Pausa', Georgia, serif;
+    --font-mono:
+      ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  /* Rolagem suave nas âncoras, desligada com movimento reduzido. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  html {
+    scroll-padding-top: 5rem;
+  }
+
+  /* Margem no corpo, nos dados e na interface; Pausa leve só nos títulos
+     editoriais, pelas classes de `lib/tipografia.ts`. */
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    overflow-y: scroll !important;
+    margin-right: 0 !important;
+  }
+
+  /* Um só peso de destaque na Margem: 600, o mesmo dos subtítulos. */
+  :is(strong, b) {
+    font-weight: 600;
+  }
+
+  :is(a, button, [role='tab'], summary):focus-visible {
+    outline: 3px solid var(--ps-violet);
+    outline-offset: 3px;
+  }
+
+  button,
+  [role='button'],
+  a,
+  label[for] {
+    cursor: pointer;
+  }
+}
+
+/* Utilitários */
+
+@layer utilities {
+  .font-margem {
+    font-family: var(--font-sans);
+  }
+
+  .font-pausa {
+    font-family: var(--font-serif);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* Grifo menta sob a ênfase do título. */
+  .brand-highlight {
+    font-style: normal;
+    background: linear-gradient(transparent 82%, var(--ps-mint) 82%);
+  }
+}
+
+/* Fundo abstrato das seções: círculo, bloco de canto arredondado, contorno,
+   linhas de movimento, matriz de pontos e acento coral. O desenho está em
+   `components/marca/FundoDeSecao.tsx`. */
+.brand-backdrop {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  width: 100%;
+  height: min(100%, 52rem);
+  inset: auto 0 0;
+  opacity: var(--backdrop-opacity, 0.72);
+}
+
+@media (max-width: 1023px) {
+  .brand-backdrop {
+    width: max(100%, 48rem);
+    height: auto;
+    aspect-ratio: 1440 / 700;
+    top: 6rem;
+    bottom: auto;
+    left: auto;
+    right: -2rem;
+    opacity: 0.4;
+  }
+
+  .brand-backdrop-flip {
+    left: -2rem;
+    right: auto;
+  }
+}
+
+/* Acessibilidade */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Tokens do tema para o shadcn */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
