@@ -6,8 +6,8 @@ name: CI
 # O _checks.yml compartilhado roda commitlint no título do PR, lint,
 # typecheck, format:check, build e test. O script adicional, `conferir`,
 # roda a suíte de conformidade contra o servidor de exemplo e confere os
-# links dos arquivos Markdown. Nada aqui é publicado: não há release, npm
-# nem site.
+# links dos arquivos Markdown. Não há release nem pacote no npm. O site é
+# publicado no Cloudflare Pages por `site.yml`.
 
 on:
   push:

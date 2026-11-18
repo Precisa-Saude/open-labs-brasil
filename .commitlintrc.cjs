@@ -20,6 +20,7 @@ module.exports = {
         'deps',
         'lint',
         'config',
+        'site',
       ],
     ],
   },

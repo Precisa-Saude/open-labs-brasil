@@ -14,7 +14,7 @@ BREAKING CHANGE: notas (opcional)
 
 **Tipos**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `build`, `ci`, `revert`
 
-**Escopos**: `especificacao`, `registro`, `servidor`, `suite`, `ambiente`, `ferramentas`, `docs`, `ci`, `deps`, `lint`, `config`, declarados em `.commitlintrc.cjs`.
+**Escopos**: `especificacao`, `registro`, `servidor`, `suite`, `ambiente`, `ferramentas`, `docs`, `ci`, `deps`, `lint`, `config`, `site`, declarados em `.commitlintrc.cjs`.
 
 **Idioma**: a descrição do commit é escrita em pt-BR; o tipo permanece em inglês, como manda o Conventional Commits.
 
@@ -42,3 +42,4 @@ Vitest, sem piso de cobertura. A evidência de que as ferramentas testam o que d
 
 - Dependências de execução: só `jose` e `ajv`
 - Qualquer outra dependência externa precisa de aprovação explícita no PR
+- O site (`site/`) é um pacote à parte do workspace, com dependências próprias (React, Vite, Tailwind e os pacotes de interface da Precisa Saúde), que não chegam às ferramentas
