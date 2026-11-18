@@ -24,9 +24,8 @@ export function Exemplos() {
     <SecaoEmGrade id="exemplos">
       <h2 className={TIPO.tituloDeSecao}>Exemplos da especificação</h2>
       <p className={`mt-4 max-w-[58ch] ${TIPO.abertura}`}>
-        Requisições e respostas do capítulo 5, lidas do próprio texto da especificação quando a
-        página é gerada. Os endereços usam o domínio reservado <code>.example</code>, e o CPF serve
-        só para mostrar o formato.
+        As chamadas que o aplicativo faz ao laboratório na jornada, do consentimento ao primeiro
+        agendamento.
       </p>
 
       <div className="mt-8 mb-4 lg:hidden">
