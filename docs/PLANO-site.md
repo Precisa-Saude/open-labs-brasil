@@ -20,14 +20,12 @@ Uma página única que explica o protocolo para engenharia e segurança de labor
 
 ## Fora desta etapa
 
-- Domínio próprio. Por enquanto o site fica no Cloudflare Pages, no projeto `open-labs-brasil` em `pages.dev`, como o datasus-viz, publicado por `.github/workflows/site.yml` a cada mudança na `main` que toque o site ou os arquivos de onde ele lê números.
-- Imagem de compartilhamento (Open Graph). Os ícones são os mesmos do fhir-brasil e do medbench-brasil.
+- Domínio próprio. Decidido em 2026-11-18 que o site fica em https://open-labs-brasil.pages.dev/, no Cloudflare Pages, como o datasus-viz, publicado por `.github/workflows/site.yml` a cada mudança na `main` que toque o site ou os arquivos de onde ele lê números.
 - Versão em inglês.
 - Revisão de desenho, que é do mantenedor, no navegador.
 
-## Próximos passos
+## Situação
 
-1. Revisão da página no navegador.
-2. Conferir a primeira publicação depois do merge e o endereço que o Cloudflare deu ao projeto.
-3. Imagem de compartilhamento.
-4. Domínio próprio, quando houver.
+Feitos: revisão da página, primeira publicação (#13 e #14) e imagem de compartilhamento.
+
+A imagem de compartilhamento (`site/public/imagem-de-compartilhamento.png`, 1200 × 630) é desenhada com os componentes da página em `site/compartilhamento.html`, que só existe no servidor de desenvolvimento. Como regenerar o PNG está em `site/src/compartilhamento.tsx`. Quando o título da abertura mudar, a imagem precisa ser gerada de novo.
