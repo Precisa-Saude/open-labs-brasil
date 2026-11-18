@@ -6,6 +6,7 @@ import { ESPECIFICACAO } from '../dados/situacao';
 import { TIPO } from '../lib/tipografia';
 import { FundoDeSecao } from './marca/FundoDeSecao';
 import { estiloDaGrade } from './marca/SecaoEmGrade';
+import { TelaDeConsentimento } from './TelaDeConsentimento';
 
 const COMANDO = `git clone ${REPOSITORIO}`;
 
@@ -92,6 +93,8 @@ export function Abertura() {
             {copiado ? 'Comando copiado' : ''}
           </span>
         </div>
+
+        <TelaDeConsentimento />
       </div>
 
       <div className="relative mx-auto grid gap-4 px-4 pb-4 md:px-0" style={estiloDaGrade}>

@@ -98,7 +98,9 @@ anything written to the repo.
   `especificacao/00-indice.md` and the conformance numbers from
   `docs/cobertura-de-requisitos.md` at build time
   (`site/src/dados/situacao.ts`), and the request and response examples
-  from `especificacao/05-api.md` (`site/src/dados/exemplos.ts`). Never type
+  from `especificacao/05-api.md` (`site/src/dados/exemplos.ts`). The consent
+  screen in the hero takes its names, scope texts, purpose and expiry from
+  the registry example, sections 3.4 and 5.4.1 (`site/src/dados/consentimento.ts`). Never type
   those numbers or snippets into a component. If either sentence changes shape, the build fails on purpose.
 - Every claim on the page comes from the spec, the README or
   `docs/apresentacao-para-laboratorios.md`. When the spec changes what the
