@@ -22,6 +22,7 @@ import {
   lerCorpo,
   lerFormulario,
   novoId,
+  politicaDeConteudo,
   tipoDoConteudo,
 } from './http.ts';
 import {
@@ -320,6 +321,14 @@ export function iniciarAutorizacaoPorControle(
   return pedidoParaAutorizar(provedor, clientId, requestUri);
 }
 
+/**
+ * Login e consentimento: os formulários destas páginas terminam num 303 para o
+ * redirect_uri do aplicativo, então a origem dele entra no form-action.
+ */
+function cspDaJornada(redirectUri: string): Record<string, string> {
+  return { 'Content-Security-Policy': politicaDeConteudo([new URL(redirectUri).origin]) };
+}
+
 export async function tratarAutorizacao(
   provedor: Provedor,
   req: IncomingMessage,
@@ -343,6 +352,7 @@ export async function tratarAutorizacao(
         res,
         200,
         paginaDeLogin(`${url.pathname}/login`, { transacao: transacao.id }),
+        cspDaJornada(par.redirectUri),
       );
     }
     if (req.method !== 'POST')
@@ -363,6 +373,7 @@ export async function tratarAutorizacao(
           res,
           200,
           paginaDeLogin(url.pathname, { transacao: transacao.id }, 'Usuário ou senha incorretos.'),
+          cspDaJornada(par.redirectUri),
         );
       }
       transacao.pacienteId = paciente.id;
@@ -385,6 +396,7 @@ export async function tratarAutorizacao(
           nomeDoReceptor: receptor?.receiver?.client_name ?? par.clientId,
           transacao: transacao.id,
         }),
+        cspDaJornada(par.redirectUri),
       );
     }
     if (url.pathname.endsWith('/authorize/decisao')) {

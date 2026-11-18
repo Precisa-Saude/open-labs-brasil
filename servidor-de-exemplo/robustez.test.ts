@@ -191,3 +191,35 @@ describe('data_period', () => {
     ).toBe(false);
   });
 });
+
+describe('páginas de autorização', () => {
+  // O Chrome aplica o form-action também ao redirecionamento que segue o envio
+  // do formulário. Com só 'self', a volta ao redirect_uri do aplicativo, que é
+  // de outra origem, é bloqueada depois de "Aprovar".
+  it('login e consentimento permitem enviar o formulário para a origem do redirect_uri', async () => {
+    await comServidorDeExemplo(async (ctx) => {
+      const c = ctx.cliente('principal');
+      const consentId = await ctx.novoConsentimento(c);
+      const { resposta } = await ctx.par(c, consentId);
+      const ru = (resposta.json as { request_uri: string }).request_uri;
+      const url = ctx.urlDeAutorizacao(c.clientId, ru);
+      const origem = new URL(c.redirectUri).origin;
+      const formAction = (csp: unknown) =>
+        /form-action ([^;]+)/.exec(String(csp))?.[1]?.trim().split(/\s+/) ?? [];
+
+      const login = await ctx.http.requisitar(url, { credencial: null });
+      expect(formAction(login.cabecalhos['content-security-policy'])).toEqual(["'self'", origem]);
+
+      const acao = /<form method="post" action="([^"]+)"/.exec(login.texto)![1]!;
+      const transacao = /name="transacao" value="([^"]+)"/.exec(login.texto)![1]!;
+      const tela = await ctx.http.requisitar(new URL(acao, url).toString(), {
+        cabecalhos: { 'content-type': 'application/x-www-form-urlencoded' },
+        corpo: new URLSearchParams({ senha: 'teste', transacao, usuario: 'ana' }).toString(),
+        credencial: null,
+        metodo: 'POST',
+      });
+      expect(tela.texto).toContain('Aprovar');
+      expect(formAction(tela.cabecalhos['content-security-policy'])).toEqual(["'self'", origem]);
+    });
+  });
+});
