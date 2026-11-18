@@ -103,6 +103,10 @@ anything written to the repo.
 - Every claim on the page comes from the spec, the README or
   `docs/apresentacao-para-laboratorios.md`. When the spec changes what the
   page says, update the page in the same PR.
+- The social preview image `site/public/imagem-de-compartilhamento.png` is
+  a screenshot of `site/compartilhamento.html` (dev server only, not in the
+  build). Regenerate it when the hero title changes; the command is in
+  `site/src/compartilhamento.tsx`.
 - The visual language is the fhir-brasil site's: `components/marca/` and
   `lib/tipografia.ts` are ports of it. Change them there first.
 
