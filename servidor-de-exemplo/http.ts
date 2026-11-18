@@ -140,6 +140,16 @@ export function enviarFhir(
   res.end(texto);
 }
 
+/**
+ * Política de conteúdo das páginas. `formAction` acrescenta origens ao
+ * form-action: o Chrome aplica a diretiva também ao redirecionamento que segue
+ * o envio do formulário, então a página cujo formulário termina no
+ * redirect_uri do aplicativo precisa listar a origem dele.
+ */
+export function politicaDeConteudo(formAction: string[] = []): string {
+  return `default-src 'none'; style-src 'unsafe-inline'; form-action ${["'self'", ...formAction].join(' ')}`;
+}
+
 export function enviarHtml(
   res: ServerResponse,
   status: number,
@@ -149,7 +159,7 @@ export function enviarHtml(
   res.writeHead(status, {
     'Cache-Control': 'no-store',
     'Content-Length': Buffer.byteLength(html),
-    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'",
+    'Content-Security-Policy': politicaDeConteudo(),
     'Content-Type': 'text/html; charset=utf-8',
     'X-Frame-Options': 'DENY',
     ...cabecalhos,
