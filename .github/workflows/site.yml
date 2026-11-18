@@ -29,7 +29,7 @@ env:
   PROJETO: open-labs-brasil
 
 jobs:
-  publicar:
+  compilar:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -43,6 +43,28 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site
+          path: site/dist
+          if-no-files-found: error
+
+  # Job separado, sem o checkout: o wrangler-action instala o wrangler com
+  # `npm i` no diretório de trabalho, e o npm falha dentro da árvore de
+  # node_modules do pnpm ("Cannot read properties of null (reading
+  # 'matches')"). O datasus-viz publica do mesmo jeito.
+  publicar:
+    needs: compilar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site
+          path: site/dist
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22.18'
 
       # O `pages deploy` não cria o projeto em ambiente não interativo. Na
       # primeira publicação ele é criado aqui; nas seguintes, a consulta acha
