@@ -1,15 +1,19 @@
 {
-  "enabled": false,
-  "provider": "github-models",
-  "fallbackProviders": [],
+  "enabled": true,
+  "provider": "openrouter",
+  "fallbackProviders": ["anthropic"],
   "includePaths": [
     "comum/**",
     "servidor-de-exemplo/**",
     "suite-de-conformidade/**",
     "ambiente-local/**",
-    "ferramentas/**"
+    "ferramentas/**",
+    "especificacao/**",
+    ".github/**",
+    "docs/**",
+    "README.md"
   ],
-  "excludePaths": ["**/fixtures/**"],
+  "excludePaths": ["**/fixtures/**", "ambiente-local/gerado/**"],
   "scanForSecretsBeforeSending": true,
   "onSensitiveContent": "block"
 }
