@@ -9,6 +9,7 @@ import type { JWK } from 'jose';
 import { describe, expect, it } from 'vitest';
 
 import { baixarRegistro, type ChaveDoRegistro, verificarCandidato } from '../comum/registro.ts';
+import { Hospedagem } from '../suite-de-conformidade/hospedagem.ts';
 import {
   Navegador,
   pacienteNoNavegador,
@@ -19,7 +20,7 @@ import { type ConfiguracaoDaDemonstracao, iniciarDemonstracao } from './demonstr
 describe('pnpm demonstracao', () => {
   it('um aplicativo que só lê demonstracao.json conecta o paciente e lê os laudos', async () => {
     const nome = 'Aplicativo de demonstração do teste';
-    const retornoPara = 'http://localhost:3999/api/lab-access/retorno';
+    const retornoPara = 'http://localhost:3999/api/lab-access/retorno?tenant=teste';
     const demonstracao = await iniciarDemonstracao({ nome, retornoPara });
     try {
       const cfg = JSON.parse(
@@ -75,8 +76,16 @@ describe('pnpm demonstracao', () => {
       const repasse = await nav.pedir(retorno);
       expect(repasse.status).toBe(303);
       const destino = new URL(repasse.location!);
-      expect(`${destino.origin}${destino.pathname}`).toBe(retornoPara);
-      expect(destino.search).toBe(new URL(retorno).search);
+      const backend = new URL(retornoPara);
+      expect(`${destino.origin}${destino.pathname}`).toBe(`${backend.origin}${backend.pathname}`);
+      expect(destino.searchParams.get('tenant')).toBe('teste');
+      for (const [chave, valor] of new URL(retorno).searchParams) {
+        expect(destino.searchParams.get(chave)).toBe(valor);
+      }
+
+      const retornoComEscapes = await nav.pedir(`${retorno}&tenant=outro&exemplo=a%20b%2Fc`);
+      expect(retornoComEscapes.location).toContain('exemplo=a%20b%2Fc');
+      expect(new URL(retornoComEscapes.location!).searchParams.get('tenant')).toBe('teste');
 
       const conexao = await receptor.concluirConexao(repasse.location!);
       if (!conexao.ok) throw new Error(`conexão falhou: ${conexao.motivo} ${conexao.detalhe}`);
@@ -84,5 +93,10 @@ describe('pnpm demonstracao', () => {
     } finally {
       await demonstracao.fechar();
     }
+  });
+
+  it('recusa um destino relativo ao registrar o redirecionamento', () => {
+    const hospedagem = new Hospedagem();
+    expect(() => hospedagem.redirecionar('/demonstracao/retorno', '/retorno')).toThrow(TypeError);
   });
 });

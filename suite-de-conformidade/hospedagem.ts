@@ -13,10 +13,24 @@ export interface RequisicaoRecebida {
   em: number;
 }
 
+function enderecoDeRetorno(destino: URL, consultaRecebida: string): string {
+  const nomesDoDestino = new Set(destino.searchParams.keys());
+  const recebidos = consultaRecebida
+    .slice(1)
+    .split('&')
+    .filter(
+      (par) => par && !nomesDoDestino.has(new URLSearchParams(par).keys().next().value ?? ''),
+    );
+  const retorno = new URL(destino);
+  // O destino registrado prevalece; atribuir search preserva os escapes originais.
+  retorno.search = [destino.search.slice(1), ...recebidos].filter(Boolean).join('&');
+  return retorno.toString();
+}
+
 export class Hospedagem {
   readonly arquivos = new Map<string, { tipo: string; conteudo: Buffer }>();
   readonly recebidas: RequisicaoRecebida[] = [];
-  readonly redirecionamentos = new Map<string, string>();
+  readonly redirecionamentos = new Map<string, URL>();
   private servidor: https.Server | undefined;
 
   publicar(caminho: string, conteudo: Buffer | string, tipo = 'application/json'): void {
@@ -26,9 +40,9 @@ export class Hospedagem {
     });
   }
 
-  /** Responde 303 para `destino`, com a consulta da requisição sem alteração. */
+  /** Responde 303 para `destino`, preservando sua consulta e os parâmetros recebidos. */
   redirecionar(caminho: string, destino: string): void {
-    this.redirecionamentos.set(caminho, destino);
+    this.redirecionamentos.set(caminho, new URL(destino));
   }
 
   async iniciar(o: {
@@ -45,7 +59,10 @@ export class Hospedagem {
         this.recebidas.push({ caminho, em: Date.now() });
         const destino = this.redirecionamentos.get(caminho);
         if (req.method === 'GET' && destino) {
-          res.writeHead(303, { 'Cache-Control': 'no-store', Location: `${destino}${url.search}` });
+          res.writeHead(303, {
+            'Cache-Control': 'no-store',
+            Location: enderecoDeRetorno(destino, url.search),
+          });
           res.end();
           return;
         }
