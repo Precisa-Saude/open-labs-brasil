@@ -26,7 +26,7 @@ export class Hospedagem {
     });
   }
 
-  /** Responde 303 para `destino`, com a consulta da requisição sem alteração. */
+  /** Responde 303 para `destino`, preservando sua consulta e os parâmetros recebidos. */
   redirecionar(caminho: string, destino: string): void {
     this.redirecionamentos.set(caminho, destino);
   }
@@ -45,7 +45,11 @@ export class Hospedagem {
         this.recebidas.push({ caminho, em: Date.now() });
         const destino = this.redirecionamentos.get(caminho);
         if (req.method === 'GET' && destino) {
-          res.writeHead(303, { 'Cache-Control': 'no-store', Location: `${destino}${url.search}` });
+          const retorno = new URL(destino);
+          // Os parâmetros do provedor prevalecem sobre nomes iguais no destino.
+          for (const chave of url.searchParams.keys()) retorno.searchParams.delete(chave);
+          for (const [chave, valor] of url.searchParams) retorno.searchParams.append(chave, valor);
+          res.writeHead(303, { 'Cache-Control': 'no-store', Location: retorno.toString() });
           res.end();
           return;
         }
