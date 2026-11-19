@@ -14,16 +14,16 @@ export interface RequisicaoRecebida {
 }
 
 function enderecoDeRetorno(destino: URL, consultaRecebida: string): string {
-  const nomesRecebidos = new Set(new URLSearchParams(consultaRecebida).keys());
-  const anteriores = destino.search
+  const nomesDoDestino = new Set(destino.searchParams.keys());
+  const recebidos = consultaRecebida
     .slice(1)
     .split('&')
     .filter(
-      (par) => par && !nomesRecebidos.has(new URLSearchParams(par).keys().next().value ?? ''),
+      (par) => par && !nomesDoDestino.has(new URLSearchParams(par).keys().next().value ?? ''),
     );
   const retorno = new URL(destino);
-  // Atribuir search preserva os escapes originais; modificar searchParams re-serializaria a consulta.
-  retorno.search = [...anteriores, consultaRecebida.slice(1)].filter(Boolean).join('&');
+  // O destino registrado prevalece; atribuir search preserva os escapes originais.
+  retorno.search = [destino.search.slice(1), ...recebidos].filter(Boolean).join('&');
   return retorno.toString();
 }
 

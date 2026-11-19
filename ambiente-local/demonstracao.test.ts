@@ -83,8 +83,9 @@ describe('pnpm demonstracao', () => {
         expect(destino.searchParams.get(chave)).toBe(valor);
       }
 
-      const retornoComEscapes = await nav.pedir(`${retorno}&exemplo=a%20b%2Fc`);
+      const retornoComEscapes = await nav.pedir(`${retorno}&tenant=outro&exemplo=a%20b%2Fc`);
       expect(retornoComEscapes.location).toContain('exemplo=a%20b%2Fc');
+      expect(new URL(retornoComEscapes.location!).searchParams.get('tenant')).toBe('teste');
 
       const conexao = await receptor.concluirConexao(repasse.location!);
       if (!conexao.ok) throw new Error(`conexão falhou: ${conexao.motivo} ${conexao.detalhe}`);
