@@ -9,6 +9,7 @@ import type { JWK } from 'jose';
 import { describe, expect, it } from 'vitest';
 
 import { baixarRegistro, type ChaveDoRegistro, verificarCandidato } from '../comum/registro.ts';
+import { Hospedagem } from '../suite-de-conformidade/hospedagem.ts';
 import {
   Navegador,
   pacienteNoNavegador,
@@ -82,11 +83,19 @@ describe('pnpm demonstracao', () => {
         expect(destino.searchParams.get(chave)).toBe(valor);
       }
 
+      const retornoComEscapes = await nav.pedir(`${retorno}&exemplo=a%20b%2Fc`);
+      expect(retornoComEscapes.location).toContain('exemplo=a%20b%2Fc');
+
       const conexao = await receptor.concluirConexao(repasse.location!);
       if (!conexao.ok) throw new Error(`conexão falhou: ${conexao.motivo} ${conexao.detalhe}`);
       expect((await receptor.resultados(conexao.vinculo)).length).toBeGreaterThan(0);
     } finally {
       await demonstracao.fechar();
     }
+  });
+
+  it('recusa um destino relativo ao registrar o redirecionamento', () => {
+    const hospedagem = new Hospedagem();
+    expect(() => hospedagem.redirecionar('/demonstracao/retorno', '/retorno')).toThrow(TypeError);
   });
 });

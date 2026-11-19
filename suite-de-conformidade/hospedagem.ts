@@ -13,10 +13,24 @@ export interface RequisicaoRecebida {
   em: number;
 }
 
+function enderecoDeRetorno(destino: URL, consultaRecebida: string): string {
+  const nomesRecebidos = new Set(new URLSearchParams(consultaRecebida).keys());
+  const anteriores = destino.search
+    .slice(1)
+    .split('&')
+    .filter(
+      (par) => par && !nomesRecebidos.has(new URLSearchParams(par).keys().next().value ?? ''),
+    );
+  const retorno = new URL(destino);
+  // Atribuir search preserva os escapes originais; modificar searchParams re-serializaria a consulta.
+  retorno.search = [...anteriores, consultaRecebida.slice(1)].filter(Boolean).join('&');
+  return retorno.toString();
+}
+
 export class Hospedagem {
   readonly arquivos = new Map<string, { tipo: string; conteudo: Buffer }>();
   readonly recebidas: RequisicaoRecebida[] = [];
-  readonly redirecionamentos = new Map<string, string>();
+  readonly redirecionamentos = new Map<string, URL>();
   private servidor: https.Server | undefined;
 
   publicar(caminho: string, conteudo: Buffer | string, tipo = 'application/json'): void {
@@ -28,7 +42,7 @@ export class Hospedagem {
 
   /** Responde 303 para `destino`, preservando sua consulta e os parâmetros recebidos. */
   redirecionar(caminho: string, destino: string): void {
-    this.redirecionamentos.set(caminho, destino);
+    this.redirecionamentos.set(caminho, new URL(destino));
   }
 
   async iniciar(o: {
@@ -45,11 +59,10 @@ export class Hospedagem {
         this.recebidas.push({ caminho, em: Date.now() });
         const destino = this.redirecionamentos.get(caminho);
         if (req.method === 'GET' && destino) {
-          const retorno = new URL(destino);
-          // Os parâmetros do provedor prevalecem sobre nomes iguais no destino.
-          for (const chave of url.searchParams.keys()) retorno.searchParams.delete(chave);
-          for (const [chave, valor] of url.searchParams) retorno.searchParams.append(chave, valor);
-          res.writeHead(303, { 'Cache-Control': 'no-store', Location: retorno.toString() });
+          res.writeHead(303, {
+            'Cache-Control': 'no-store',
+            Location: enderecoDeRetorno(destino, url.search),
+          });
           res.end();
           return;
         }
